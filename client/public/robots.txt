@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/admin/
+Disallow: /admin/
+Sitemap: https://dseu-unfiltered.vercel.app/sitemap.xml

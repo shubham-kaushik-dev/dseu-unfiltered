@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline | DSEU Unfiltered</title>
+  <style>
+    body {
+      background-color: #FAFAFA;
+      background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+      background-size: 24px 24px;
+      color: #1e293b;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      text-align: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 360px;
+      background: #FFFFFF;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      padding: 40px 30px;
+      border-radius: 24px;
+      box-shadow: 0 10px 30px -10px rgba(148, 163, 184, 0.15);
+    }
+    .logo-container {
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: center;
+    }
+    .logo-svg {
+      width: 64px;
+      height: 64px;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 900;
+      margin: 0 0 12px;
+      letter-spacing: -0.5px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #7C3AED 0%, #2563EB 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p {
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.6;
+      margin: 0 0 24px;
+    }
+    button {
+      background: linear-gradient(135deg, #7C3AED 0%, #2563EB 100%);
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.3);
+      transition: all 0.2s;
+    }
+    button:hover {
+      box-shadow: 0 6px 20px 0 rgba(124, 58, 237, 0.45);
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo-container">
+      <svg class="logo-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="logoPremiumGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#7C3AED" />
+            <stop offset="100%" stopColor="#2563EB" />
+          </linearGradient>
+        </defs>
+        <path d="M20 50 C20 36.19 31.19 25 45 25 H55 C68.81 25 80 36.19 80 50 C80 63.81 68.81 75 55 75 H35 L20 85 V75 C20 75 20 75 20 50Z" fill="url(#logoPremiumGrad)" />
+        <path d="M38 44 C38 52 43 56 50 56 C57 56 62 52 62 44" stroke="#FFFFFF" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="50" cy="35" r="4" fill="#FFFFFF" />
+      </svg>
+    </div>
+    <h1>You are offline</h1>
+    <p>DSEU Unfiltered requires an active internet connection to chat and interact in real time. Check your connection status and try reloading.</p>
+    <button onclick="window.location.reload()">Retry Connection</button>
+  </div>
+</body>
+</html>
