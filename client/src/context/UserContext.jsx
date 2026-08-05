@@ -32,7 +32,10 @@ export function UserProvider({ children }) {
         headers['x-anonymous-token'] = token;
       }
       
-      const response = await fetch(`${API_BASE}/api/auth/me`, { headers });
+      const response = await fetch(`${API_BASE}/api/auth/me`, { 
+        headers,
+        credentials: 'include'
+      });
       
       if (response.status === 503) {
         const errorData = await response.json();

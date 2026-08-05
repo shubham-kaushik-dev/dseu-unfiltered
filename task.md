@@ -54,3 +54,4 @@
 - [x] Create `client/.env.example` defining default VITE_API_URL settings for production Vercel servers.
 - [x] Configure reusable API_BASE constant matching VITE_API_URL environment variables.
 - [x] Prepend API_BASE to every `fetch('/api/...')` call inside the client codebase.
+- [x] Enable cross-origin credentials inclusions on frontend user identity checks (`/api/auth/me`).
