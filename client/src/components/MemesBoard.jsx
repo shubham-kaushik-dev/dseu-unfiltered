@@ -6,6 +6,8 @@ import { applyMemeWatermark } from '../utils/watermark';
 import MemeCard from './MemeCard';
 import { Image, HelpCircle, FileWarning, Sparkles } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export default function MemesBoard({ isAdmin }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
@@ -21,7 +23,7 @@ export default function MemesBoard({ isAdmin }) {
   const fetchMemes = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/memes');
+      const res = await fetch(`${API_BASE}/api/memes`);
       if (res.ok) {
         const data = await res.json();
         setMemes(data);
@@ -110,7 +112,7 @@ export default function MemesBoard({ isAdmin }) {
       formData.append('meme', watermarkedFile);
       formData.append('caption', caption);
 
-      const response = await fetch('/api/memes', {
+      const response = await fetch(`${API_BASE}/api/memes`, {
         method: 'POST',
         body: formData
       });
@@ -136,7 +138,7 @@ export default function MemesBoard({ isAdmin }) {
 
   const handleReact = async (id, emoji) => {
     try {
-      await fetch(`/api/memes/${id}/react`, {
+      await fetch(`${API_BASE}/api/memes/${id}/react`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -150,7 +152,7 @@ export default function MemesBoard({ isAdmin }) {
 
   const handleAddComment = async (id, text) => {
     try {
-      const response = await fetch(`/api/memes/${id}/comment`, {
+      const response = await fetch(`${API_BASE}/api/memes/${id}/comment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -171,7 +173,7 @@ export default function MemesBoard({ isAdmin }) {
 
   const handleReport = async (id, reason) => {
     try {
-      const response = await fetch(`/api/memes/${id}/report`, {
+      const response = await fetch(`${API_BASE}/api/memes/${id}/report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

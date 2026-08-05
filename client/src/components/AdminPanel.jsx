@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export default function AdminPanel({ onAdminStateChange }) {
   const { user, adminCsrfToken, refreshProfile, setAdminCsrfToken, adminFetch } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
@@ -117,7 +119,7 @@ export default function AdminPanel({ onAdminStateChange }) {
 
   // Auto check and login if cookies are already authenticated on mount
   useEffect(() => {
-    fetch('/api/admin/check', { credentials: 'include' })
+    fetch(`${API_BASE}/api/admin/check`, { credentials: 'include' })
       .then(async (res) => {
         if (res.ok) {
           const check = await res.json();
@@ -248,7 +250,7 @@ export default function AdminPanel({ onAdminStateChange }) {
 
     try {
       setIsAuthenticating(true);
-      const res = await fetch('/api/admin/login', {
+      const res = await fetch(`${API_BASE}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: usernameInput, password: passwordInput }),
@@ -276,7 +278,7 @@ export default function AdminPanel({ onAdminStateChange }) {
 
   const handleLogoutClick = async () => {
     try {
-      await fetch('/api/admin/logout', { 
+      await fetch(`${API_BASE}/api/admin/logout`, { 
         method: 'POST',
         credentials: 'include'
       });
@@ -391,7 +393,7 @@ export default function AdminPanel({ onAdminStateChange }) {
   const fetchSettings = async () => {
     try {
       setSettingsLoading(true);
-      const res = await fetch('/api/settings');
+      const res = await fetch(`${API_BASE}/api/settings`);
       if (res.ok) {
         const data = await res.json();
         setSettings(data);

@@ -52,3 +52,5 @@
 - [x] Add default and named ESM exports for Express `app` and `server` at the bottom of `server.js`.
 - [x] Configure Socket.IO server target endpoint dynamically using `import.meta.env.VITE_API_URL` fallback to localhost.
 - [x] Create `client/.env.example` defining default VITE_API_URL settings for production Vercel servers.
+- [x] Configure reusable API_BASE constant matching VITE_API_URL environment variables.
+- [x] Prepend API_BASE to every `fetch('/api/...')` call inside the client codebase.

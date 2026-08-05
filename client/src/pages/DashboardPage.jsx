@@ -4,6 +4,8 @@ import { SocketContext } from '../context/SocketContext';
 import Logo from '../components/Logo';
 import professorAvatar from '../assets/professor-avatar.png';
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 // Code splitting & lazy loading components for performance optimization
 const ChatBox = React.lazy(() => import('../components/ChatBox'));
 const ConfessionsBoard = React.lazy(() => import('../components/ConfessionsBoard'));
@@ -64,13 +66,13 @@ export default function DashboardPage() {
   // Retrieve initial pinned announcement on load
   useEffect(() => {
     // A quick check to fetch slowmode/announcement
-    fetch('/api/admin/stats')
+    fetch(`${API_BASE}/api/admin/stats`)
       .catch(() => {});
     
     // Set default announcement (will sync via socket also)
     const fetchSettings = async () => {
       try {
-        const res = await fetch('/api/confessions'); // Wake up endpoint or similar
+        const res = await fetch(`${API_BASE}/api/confessions`); // Wake up endpoint or similar
       } catch (err) {}
     };
     fetchSettings();

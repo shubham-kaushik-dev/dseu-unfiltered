@@ -1,5 +1,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export const UserContext = createContext();
 
 export function UserProvider({ children }) {
@@ -30,7 +32,7 @@ export function UserProvider({ children }) {
         headers['x-anonymous-token'] = token;
       }
       
-      const response = await fetch('/api/auth/me', { headers });
+      const response = await fetch(`${API_BASE}/api/auth/me`, { headers });
       
       if (response.status === 503) {
         const errorData = await response.json();
@@ -93,7 +95,7 @@ export function UserProvider({ children }) {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(`${API_BASE}${url}`, {
         ...options,
         headers,
         credentials: 'include'

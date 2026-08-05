@@ -4,6 +4,8 @@ import { SocketContext } from '../context/SocketContext';
 import { ToastContext } from '../context/ToastContext';
 import { playNotificationChime } from '../utils/sound';
 import professorAvatar from '../assets/professor-avatar.png';
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
 import { 
   Send, Smile, Trash2, Edit2, Check, X, Volume2, VolumeX, 
   AlertTriangle, Pin, Reply, HelpCircle, ShieldAlert
@@ -62,14 +64,14 @@ export default function ChatBox({ isAdmin, adminToken }) {
   const fetchSettingsAndPinned = async () => {
     try {
       // 1. Fetch pinned
-      const pinRes = await fetch('/api/chat/pinned');
+      const pinRes = await fetch(`${API_BASE}/api/chat/pinned`);
       if (pinRes.ok) {
         const pinData = await pinRes.json();
         setPinnedMessage(pinData);
       }
       
       // 2. Fetch presence settings
-      const settingsRes = await fetch('/api/settings');
+      const settingsRes = await fetch(`${API_BASE}/api/settings`);
       if (settingsRes.ok) {
         const config = await settingsRes.json();
         setProfessorOnline(config.professor_presence === 'online');
@@ -82,7 +84,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
   useEffect(() => {
     const fetchChatHistory = async () => {
       try {
-        const res = await fetch('/api/chat');
+        const res = await fetch(`${API_BASE}/api/chat`);
         if (res.ok) {
           const data = await res.json();
           setMessages(data);

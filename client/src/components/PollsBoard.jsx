@@ -5,6 +5,8 @@ import { UserContext } from '../context/UserContext';
 import PollCard from './PollCard';
 import { BarChart3, HelpCircle, PlusCircle, Trash2 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export default function PollsBoard({ isAdmin }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
@@ -19,7 +21,7 @@ export default function PollsBoard({ isAdmin }) {
   const fetchPolls = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/polls');
+      const res = await fetch(`${API_BASE}/api/polls`);
       if (res.ok) {
         const data = await res.json();
         setPolls(data);
@@ -66,7 +68,7 @@ export default function PollsBoard({ isAdmin }) {
 
   const handleVote = async (pollId, optionId) => {
     try {
-      const response = await fetch(`/api/polls/${pollId}/vote`, {
+      const response = await fetch(`${API_BASE}/api/polls/${pollId}/vote`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

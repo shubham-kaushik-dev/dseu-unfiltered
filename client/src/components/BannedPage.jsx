@@ -4,6 +4,8 @@ import { ToastContext } from '../context/ToastContext';
 import { ShieldAlert, Send, Image, Smile, Clock, Eye } from 'lucide-react';
 import Logo from './Logo';
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export default function BannedPage({ user }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
@@ -23,7 +25,7 @@ export default function BannedPage({ user }) {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const res = await fetch('/api/support/history', {
+        const res = await fetch(`${API_BASE}/api/support/history`, {
           headers: { 'x-anonymous-token': user.browserToken }
         });
         if (res.ok) {
@@ -65,7 +67,7 @@ export default function BannedPage({ user }) {
       // Fetch admin presence status from public settings periodically
       const checkAdminPresence = async () => {
         try {
-          const res = await fetch('/api/settings');
+          const res = await fetch(`${API_BASE}/api/settings`);
           if (res.ok) {
             const settings = await res.json();
             setAdminOnline(settings.professor_presence === 'online');
@@ -137,7 +139,7 @@ export default function BannedPage({ user }) {
         formData.append('attachment', selectedFile);
       }
 
-      const res = await fetch('/api/support/message', {
+      const res = await fetch(`${API_BASE}/api/support/message`, {
         method: 'POST',
         headers: {
           'x-anonymous-token': user.browserToken

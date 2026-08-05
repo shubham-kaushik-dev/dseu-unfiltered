@@ -9,6 +9,8 @@ const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
 import Logo from './components/Logo';
 import { ShieldCheck, HardHat, Lock } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 function AppContent() {
   const { 
     user, 
@@ -38,7 +40,7 @@ function AppContent() {
   // Apply settings (Title, theme accent colors) dynamically
   const applySettings = async () => {
     try {
-      const res = await fetch('/api/settings');
+      const res = await fetch(`${API_BASE}/api/settings`);
       if (res.ok) {
         const config = await res.json();
         setSiteConfig(config);

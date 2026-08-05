@@ -5,6 +5,8 @@ import { UserContext } from '../context/UserContext';
 import ConfessionCard from './ConfessionCard';
 import { HelpCircle, PenSquare, Sparkles } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export default function ConfessionsBoard({ isAdmin }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
@@ -18,7 +20,7 @@ export default function ConfessionsBoard({ isAdmin }) {
   const fetchConfessions = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/confessions');
+      const res = await fetch(`${API_BASE}/api/confessions`);
       if (res.ok) {
         const data = await res.json();
         setConfessions(data);
@@ -69,7 +71,7 @@ export default function ConfessionsBoard({ isAdmin }) {
 
     try {
       setSubmitting(true);
-      const response = await fetch('/api/confessions', {
+      const response = await fetch(`${API_BASE}/api/confessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -94,7 +96,7 @@ export default function ConfessionsBoard({ isAdmin }) {
 
   const handleReact = async (id, emoji) => {
     try {
-      await fetch(`/api/confessions/${id}/react`, {
+      await fetch(`${API_BASE}/api/confessions/${id}/react`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -108,7 +110,7 @@ export default function ConfessionsBoard({ isAdmin }) {
 
   const handleAddComment = async (id, text) => {
     try {
-      const response = await fetch(`/api/confessions/${id}/comment`, {
+      const response = await fetch(`${API_BASE}/api/confessions/${id}/comment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -129,7 +131,7 @@ export default function ConfessionsBoard({ isAdmin }) {
 
   const handleReport = async (id, reason) => {
     try {
-      const response = await fetch(`/api/confessions/${id}/report`, {
+      const response = await fetch(`${API_BASE}/api/confessions/${id}/report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
