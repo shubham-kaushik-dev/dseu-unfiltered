@@ -18,6 +18,8 @@
 }
 
 :root {
+  --primary-color: #8b5cf6;
+  --primary-color-rgb: 139, 92, 246;
   color-scheme: light;
   background-color: #FFFFFF;
   color: #1e293b; /* slate-800 */
@@ -91,8 +93,8 @@ body {
 }
 
 .glow-btn {
-  background: linear-gradient(135deg, #7C3AED 0%, #2563EB 100%);
-  box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.35);
+  background: linear-gradient(135deg, var(--primary-color) 0%, #2563EB 100%);
+  box-shadow: 0 4px 14px 0 rgba(var(--primary-color-rgb), 0.35);
   transition: all 0.3s ease;
 }
 

@@ -45,7 +45,16 @@ const memeSchema = new mongoose.Schema({
     of: [String], // Map of Unicode Emoji -> Array of browserTokens
     default: {}
   },
-  comments: [memeCommentSchema]
+  comments: [memeCommentSchema],
+  status: {
+    type: String,
+    enum: ['active', 'trash'],
+    default: 'active'
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: true
 });

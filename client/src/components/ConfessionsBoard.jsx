@@ -8,7 +8,7 @@ import { HelpCircle, PenSquare, Sparkles } from 'lucide-react';
 export default function ConfessionsBoard({ isAdmin }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
-  const { adminCsrfToken } = useContext(UserContext);
+  const { adminCsrfToken, adminFetch } = useContext(UserContext);
   const [confessions, setConfessions] = useState([]);
   const [newConfessionText, setNewConfessionText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -151,15 +151,11 @@ export default function ConfessionsBoard({ isAdmin }) {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this confession?')) return;
     try {
-      const response = await fetch(`/api/admin/confession/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'x-csrf-token': adminCsrfToken
-        },
-        credentials: 'include'
+      const response = await adminFetch(`/api/admin/confession/${id}`, {
+        method: 'DELETE'
       });
       if (!response.ok) {
-        const err = await response.json();
+        const err = await response.json().catch(() => ({}));
         showToast(err.message || 'Failed to delete confession.', 'error');
       } else {
         showToast('Confession deleted successfully.', 'success');

@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { UserContext } from '../context/UserContext';
 import { MessageSquare, Smile, Flag, CornerDownRight, Trash2, Download } from 'lucide-react';
+import professorAvatar from '../assets/professor-avatar.png';
 
 const POPULAR_EMOJIS = ['😂', '🔥', '❤️', '💀', '🤡', '😭', '😮', '💯', '👍'];
 
@@ -181,6 +182,14 @@ export default function MemeCard({ meme, onReact, onAddComment, onReport, isAdmi
                   <CornerDownRight className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
+                      <img 
+                        src={comment.sender?.role === 'admin' || comment.sender?.isAdmin === true || comment.sender?.displayName === 'Professor (ADMIN)' 
+                          ? professorAvatar
+                          : `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(comment.sender?.browserToken || comment.sender?.displayName || 'default')}`
+                        } 
+                        alt="Commenter Avatar" 
+                        className="h-6 w-6 rounded-full border border-slate-200 bg-slate-50 object-cover" 
+                      />
                       <span className="font-extrabold text-blue-605">
                         {comment.sender?.displayName || 'Anonymous'}
                       </span>

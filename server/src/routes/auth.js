@@ -3,8 +3,7 @@ import { parseUser } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// GET /api/me
-// Automatically registers user if they don't have an identity, then returns user object.
+// GET /api/auth/me
 router.get('/me', parseUser, (req, res) => {
   res.json({
     user: {
@@ -13,7 +12,13 @@ router.get('/me', parseUser, (req, res) => {
       browserToken: req.user.browserToken,
       campus: req.user.campus,
       mutedUntil: req.user.mutedUntil,
-      isBanned: req.user.isBanned
+      isBanned: req.user.isBanned,
+      banReason: req.user.banReason,
+      bannedBy: req.user.bannedBy,
+      banDate: req.user.banDate,
+      role: req.user.role,
+      isShadowBanned: req.user.isShadowBanned,
+      warnings: req.user.warnings
     }
   });
 });

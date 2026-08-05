@@ -8,7 +8,7 @@ import { BarChart3, HelpCircle, PlusCircle, Trash2 } from 'lucide-react';
 export default function PollsBoard({ isAdmin }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
-  const { adminCsrfToken } = useContext(UserContext);
+  const { adminCsrfToken, adminFetch } = useContext(UserContext);
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -88,15 +88,11 @@ export default function PollsBoard({ isAdmin }) {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this poll?')) return;
     try {
-      const response = await fetch(`/api/admin/poll/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'x-csrf-token': adminCsrfToken
-        },
-        credentials: 'include'
+      const response = await adminFetch(`/api/admin/poll/${id}`, {
+        method: 'DELETE'
       });
       if (!response.ok) {
-        const err = await response.json();
+        const err = await response.json().catch(() => ({}));
         showToast(err.message || 'Failed to delete poll.', 'error');
       } else {
         showToast('Poll deleted successfully.', 'success');
@@ -134,13 +130,8 @@ export default function PollsBoard({ isAdmin }) {
     }
 
     try {
-      const response = await fetch('/api/admin/poll', {
+      const response = await adminFetch('/api/admin/poll', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken
-        },
-        credentials: 'include',
         body: JSON.stringify({
           question,
           options: filteredOptions

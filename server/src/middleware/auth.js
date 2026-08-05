@@ -1,66 +1,104 @@
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { generateUniqueIdentity } from '../utils/identity.js';
 
 export async function parseUser(req, res, next) {
   try {
-    // 1. Extract token from cookie or authorization header
-    let token = req.cookies?.dseu_unfiltered_token;
-
-    if (!token && req.headers['authorization']) {
-      const authHeader = req.headers['authorization'];
-      if (authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
+    // 1. Check if admin cookie is present and valid
+    let isAdmin = false;
+    const adminToken = req.cookies?.dseu_unfiltered_admin;
+    if (adminToken) {
+      try {
+        const decoded = jwt.verify(adminToken, process.env.JWT_SECRET || 'fallback_secret');
+        if (decoded && decoded.username === (process.env.ADMIN_USERNAME || 'Kaushik')) {
+          isAdmin = true;
+        }
+      } catch (err) {
+        // Admin token expired or invalid
       }
-    }
-
-    // Fallback: Custom header
-    if (!token) {
-      token = req.headers['x-anonymous-token'];
     }
 
     let user = null;
 
-    if (token) {
-      // Find existing user
-      user = await User.findOne({ browserToken: token });
-    }
-
-    // 2. If no token or user exists, auto-register a new anonymous user
-    if (!user) {
-      // Generate a new secure token
-      token = crypto.randomUUID();
-      const displayName = await generateUniqueIdentity();
-
-      user = await User.create({
-        browserToken: token,
-        displayName: displayName,
-        campus: 'DSEU',
-        lastActive: new Date()
-      });
-
-      // Set cookie
-      res.cookie('dseu_unfiltered_token', token, {
-        httpOnly: true,
-        secure: true, // Always set to true since we are deploying to Render/Vercel (HTTPS), but we can relax for localhost if needed. Let's make it secure: false for localhost, true for production.
-        sameSite: 'lax',
-        maxAge: 365 * 24 * 60 * 60 * 1000 // 1 year
-      });
-      
-      // Save token on response headers to allow frontend fallback
-      res.setHeader('x-set-anonymous-token', token);
+    if (isAdmin) {
+      // Find or create the permanent admin user
+      user = await User.findOne({ role: 'admin' });
+      if (!user) {
+        user = await User.create({
+          browserToken: 'admin-token-fixed-value-2026',
+          displayName: 'Professor (ADMIN)',
+          role: 'admin',
+          campus: 'DSEU'
+        });
+      }
     } else {
-      // Update last active
-      user.lastActive = new Date();
-      await user.save();
+      // 2. Extract standard token from cookie, header, or custom header
+      let token = req.cookies?.dseu_unfiltered_token;
+
+      if (!token && req.headers['authorization']) {
+        const authHeader = req.headers['authorization'];
+        if (authHeader.startsWith('Bearer ')) {
+          token = authHeader.substring(7);
+        }
+      }
+
+      if (!token) {
+        token = req.headers['x-anonymous-token'];
+      }
+
+      if (token) {
+        // Find existing user, ensuring we never match the admin user dynamically from random tokens
+        user = await User.findOne({ browserToken: token, role: { $ne: 'admin' } });
+      }
+
+      // 3. If no token or user exists, auto-register a new anonymous user
+      if (!user) {
+        token = crypto.randomUUID();
+        const displayName = await generateUniqueIdentity();
+
+        user = await User.create({
+          browserToken: token,
+          displayName: displayName,
+          campus: 'DSEU',
+          lastActive: new Date()
+        });
+
+        // Set cookie
+        res.cookie('dseu_unfiltered_token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 365 * 24 * 60 * 60 * 1000 // 1 year
+        });
+        
+        // Save token on response headers to allow frontend fallback
+        res.setHeader('x-set-anonymous-token', token);
+      } else {
+        // Update last active activity details
+        user.lastActive = new Date();
+        user.browser = req.headers['user-agent'] || '';
+        user.ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+        await user.save();
+      }
     }
 
-    // 3. Check if user is banned
-    if (user.isBanned) {
-      return res.status(403).json({ error: 'YOUR_IDENTITY_IS_BANNED', message: 'Your anonymous identity has been permanently banned by an administrator.' });
+    // 4. Strict Ban Checks
+    if (user && user.isBanned) {
+      // Allow only safe routes (like fetching auth status or using support chat)
+      const isBannedSafeRoute = req.originalUrl === '/api/auth/me' || req.originalUrl.startsWith('/api/support');
+      if (!isBannedSafeRoute) {
+        return res.status(403).json({
+          error: 'YOUR_IDENTITY_IS_BANNED',
+          message: user.banReason || 'Your anonymous identity has been permanently banned by an administrator.',
+          banReason: user.banReason,
+          bannedBy: user.bannedBy || 'Professor',
+          banDate: user.banDate || user.updatedAt
+        });
+      }
     }
 
-    // 4. Attach user to request
+    // 5. Attach user to request
     req.user = user;
     next();
   } catch (error) {
@@ -69,7 +107,7 @@ export async function parseUser(req, res, next) {
   }
 }
 
-// Stricter check that assumes identity must be fully loaded (usually parsed via parseUser first)
+// Stricter check that assumes identity must be fully loaded
 export function requireAuth(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: 'UNAUTHORIZED', message: 'You must have a valid anonymous identity.' });

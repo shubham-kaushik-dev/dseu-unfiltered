@@ -1,1659 +1,1910 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { UserContext } from '../context/UserContext';
 import { SocketContext } from '../context/SocketContext';
 import { ToastContext } from '../context/ToastContext';
-import { UserContext } from '../context/UserContext';
 import { 
-  ShieldCheck, Lock, Users, MessageSquare, Megaphone, Clock, 
-  Trash2, ShieldAlert, Ban, Search, FileText, AlertTriangle, Play,
-  X, Check, ChevronLeft, ChevronRight, Eye, UserX, RefreshCw, Layers
+  Users, AlertTriangle, FileText, Settings, ShieldCheck, 
+  Trash2, Undo, Check, X, ShieldAlert, Ban, Clock, 
+  Settings2, Plus, Edit, Send, Image, Smile, Search, 
+  ArrowLeft, ArrowRight, Eye, ShieldAlert as StealthIcon, RefreshCw, Pin
 } from 'lucide-react';
+import Logo from './Logo';
 
 export default function AdminPanel({ onAdminStateChange }) {
+  const { user, adminCsrfToken, refreshProfile, setAdminCsrfToken, adminFetch } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
-  const { adminCsrfToken, setAdminCsrfToken } = useContext(UserContext);
-  
-  // Authentication State
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [loadingLogin, setLoadingLogin] = useState(false);
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState('analytics'); // 'analytics', 'users', 'reports', 'logs'
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [csrfToken, setCsrfToken] = useState('');
+  const [adminLoggedIn, setAdminLoggedIn] = useState(false);
 
-  // Statistics State
-  const [stats, setStats] = useState({
-    onlineUsers: 0,
-    offlineUsers: 0,
-    totalUsers: 0,
-    totalChatMessages: 0,
-    totalConfessions: 0,
-    totalMemes: 0,
-    totalPolls: 0,
-    totalReports: 0,
-    bannedUsers: 0,
-    mutedUsers: 0,
-    todayActiveUsers: 0,
-    today: { newUsers: 0, chatMessages: 0, confessions: 0, memes: 0 }
-  });
+  // Tabs: 'analytics', 'users', 'reports', 'support', 'settings', 'trash', 'history', 'announcements', 'logs'
+  const [activeTab, setActiveTab] = useState('analytics');
 
-  // Timeline / Activity Feed State
-  const [timeline, setTimeline] = useState([]);
-  const timelineEndRef = useRef(null);
+  // Stats state
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
-  // Reports Queue State
+  // Users management state
+  const [usersList, setUsersList] = useState([]);
+  const [usersSearch, setUsersSearch] = useState('');
+  const [usersFilter, setUsersFilter] = useState('all');
+  const [usersSort, setUsersSort] = useState('newest');
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersLimit, setUsersLimit] = useState(10);
+  const [usersPagination, setUsersPagination] = useState({});
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // User Profile Drawer state
+  const [drawerUserId, setDrawerUserId] = useState(null);
+  const [drawerData, setDrawerData] = useState(null);
+  const [newWarningText, setNewWarningText] = useState('');
+  const [adminNoteText, setAdminNoteText] = useState('');
+  const [drawerLoading, setDrawerLoading] = useState(false);
+
+  // Reports state
   const [reports, setReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+
+  // Support Inbox state
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversationToken, setSelectedConversationToken] = useState(null);
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [supportSearch, setSupportSearch] = useState('');
+  const [supportFilter, setSupportFilter] = useState('all'); // 'all', 'unread'
+  const [supportPage, setSupportPage] = useState(1);
+  const [supportPagination, setSupportPagination] = useState({});
+  const [supportLoading, setSupportLoading] = useState(false);
+  
+  // Support reply form state
+  const [supportReplyText, setSupportReplyText] = useState('');
+  const [supportAttachment, setSupportAttachment] = useState(null);
+  const [supportPreviewUrl, setSupportPreviewUrl] = useState('');
+  const [supportSending, setSupportSending] = useState(false);
+  const [supportUserTyping, setSupportUserTyping] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Settings State
+  const [settings, setSettings] = useState({
+    website_name: '',
+    website_logo: '',
+    website_tagline: '',
+    primary_theme_color: '#8b5cf6',
+    maintenance_message: '',
+    support_welcome_message: '',
+    max_upload_size: 10,
+    slow_mode_seconds: 0,
+    enable_notifications: true,
+    stealth_mode: false
+  });
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
+  // Trash Bin State
+  const [trashItems, setTrashItems] = useState({ messages: [], confessions: [], memes: [], polls: [] });
+  const [trashLoading, setTrashLoading] = useState(false);
+
+  // Session History State
+  const [sessionLogs, setSessionLogs] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+
+  // Announcements CRUD State
+  const [announcementHistory, setAnnouncementHistory] = useState([]);
+  const [announcementFilter, setAnnouncementFilter] = useState('all'); // 'all', 'active', 'scheduled', 'expired', 'deleted'
+  const [announcementSearch, setAnnouncementSearch] = useState('');
+  const [announcementPage, setAnnouncementPage] = useState(1);
+  const [announcementPagination, setAnnouncementPagination] = useState({});
+  const [announcementsLoading, setAnnouncementsLoading] = useState(false);
+
+  // CRUD Announcement form
+  const [newAnnouncement, setNewAnnouncement] = useState({
+    title: '',
+    content: '',
+    type: 'homepage',
+    scheduledStart: '',
+    expiresAt: '',
+    bgColor: '#f3e8ff',
+    textColor: '#6b21a8'
+  });
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState(null);
 
   // Audit Logs State
   const [auditLogs, setAuditLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
-  // Paginated Users State
-  const [users, setUsers] = useState([]);
-  const [userPagination, setUserPagination] = useState({ totalUsers: 0, totalPages: 1, currentPage: 1, limit: 10 });
-  const [userSearch, setUserSearch] = useState('');
-  const [userFilter, setUserFilter] = useState('all'); // 'all', 'online', 'offline', 'muted', 'banned', 'reported'
-  const [userSort, setUserSort] = useState('newest'); // 'newest', 'oldest', 'most_active', 'least_active'
-  const [userPage, setUserPage] = useState(1);
-  const [selectedUserIds, setSelectedUserIds] = useState([]);
-
-  // Profile Drawer State
-  const [selectedProfileId, setSelectedProfileId] = useState(null);
-  const [profileData, setProfileData] = useState(null);
-  const [loadingProfile, setLoadingProfile] = useState(false);
-  const [profileTab, setProfileTab] = useState('chats'); // 'chats', 'confessions', 'memes', 'polls', 'reports', 'logs'
-
-  // Control State
-  const [slowmodeVal, setSlowmodeVal] = useState(0);
-  const [announcementText, setAnnouncementText] = useState('');
-  const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
-  const [maintenanceMsgText, setMaintenanceMsgText] = useState('');
-  const [backupStatus, setBackupStatus] = useState(null);
-  const [loadingBackup, setLoadingBackup] = useState(false);
-  
-  // Bulk controls
-  const [bulkAction, setBulkAction] = useState('ban');
-  const [bulkMuteMins, setBulkMuteMins] = useState(60);
-
-  // Check login on mount
+  // Auto check and login if cookies are already authenticated on mount
   useEffect(() => {
-    const checkLogin = async () => {
-      try {
-        const res = await fetch('/api/admin/check', { credentials: 'include' });
+    fetch('/api/admin/check', { credentials: 'include' })
+      .then(async (res) => {
         if (res.ok) {
-          const data = await res.json();
-          setIsLoggedIn(true);
-          setAdminCsrfToken(data.csrfToken || '');
+          const check = await res.json();
+          setCsrfToken(check.csrfToken);
+          setAdminCsrfToken(check.csrfToken);
+          setAdminLoggedIn(true);
           onAdminStateChange(true);
         }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    checkLogin();
+      })
+      .catch(console.error);
   }, []);
 
-  // Fetch dashboard and lists data once logged in
-  const fetchDashboardData = async () => {
-    try {
-      const statsRes = await fetch('/api/admin/stats', { credentials: 'include' });
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setStats(statsData);
-        setSlowmodeVal(statsData.slowModeSeconds || 0);
-        setMaintenanceEnabled(statsData.maintenanceMode || false);
-        setMaintenanceMsgText(statsData.maintenanceMessage || '');
-      }
-
-      const reportsRes = await fetch('/api/admin/reports', { credentials: 'include' });
-      if (reportsRes.ok) {
-        setReports(await reportsRes.json());
-      }
-
-      const logsRes = await fetch('/api/admin/logs', { credentials: 'include' });
-      if (logsRes.ok) {
-        setAuditLogs(await logsRes.json());
-      }
-
-      const backupRes = await fetch('/api/admin/backup/status', { credentials: 'include' });
-      if (backupRes.ok) {
-        setBackupStatus(await backupRes.json());
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Fetch paginated users
-  const fetchUsers = async () => {
-    try {
-      const queryParams = new URLSearchParams({
-        page: userPage,
-        limit: 10,
-        search: userSearch,
-        filter: userFilter,
-        sort: userSort
-      });
-      const res = await fetch(`/api/admin/users?${queryParams}`, { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users || []);
-        setUserPagination(data.pagination || { totalUsers: 0, totalPages: 1, currentPage: 1, limit: 10 });
-      }
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    }
-  };
-
+  // Fetch data depending on active tab
   useEffect(() => {
-    if (isLoggedIn) {
-      fetchDashboardData();
-    }
-  }, [isLoggedIn]);
+    if (!adminLoggedIn) return;
 
+    if (activeTab === 'analytics') fetchStats();
+    else if (activeTab === 'users') fetchUsers();
+    else if (activeTab === 'reports') fetchReports();
+    else if (activeTab === 'support') fetchConversations();
+    else if (activeTab === 'settings') fetchSettings();
+    else if (activeTab === 'trash') fetchTrash();
+    else if (activeTab === 'history') fetchSessions();
+    else if (activeTab === 'announcements') fetchAnnouncementsHistory();
+    else if (activeTab === 'logs') fetchAuditLogs();
+  }, [activeTab, adminLoggedIn, usersPage, usersFilter, usersSort, supportPage, supportFilter, announcementPage, announcementFilter]);
+
+  // Sync users list whenever search query changes (debounced)
   useEffect(() => {
-    if (isLoggedIn) {
+    if (!adminLoggedIn || activeTab !== 'users') return;
+    const timer = setTimeout(() => {
+      setUsersPage(1);
       fetchUsers();
-    }
-  }, [isLoggedIn, userPage, userFilter, userSort]);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [usersSearch]);
 
-  // Handle Search submit
-  const handleUserSearchSubmit = (e) => {
-    e.preventDefault();
-    setUserPage(1);
-    fetchUsers();
-  };
-
-  // Fetch user profile drawer data
-  const fetchUserProfile = async (id) => {
-    try {
-      setLoadingProfile(true);
-      const res = await fetch(`/api/admin/user/${id}/profile`, { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setProfileData(data);
-      } else {
-        showToast('Failed to load user profile.', 'error');
-        setSelectedProfileId(null);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Connection error loading profile.', 'error');
-      setSelectedProfileId(null);
-    } finally {
-      setLoadingProfile(false);
-    }
-  };
-
+  // Debounce search inside support
   useEffect(() => {
-    if (selectedProfileId) {
-      fetchUserProfile(selectedProfileId);
-    }
-  }, [selectedProfileId]);
+    if (!adminLoggedIn || activeTab !== 'support') return;
+    const timer = setTimeout(() => {
+      setSupportPage(1);
+      fetchConversations();
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [supportSearch]);
 
-  // Real-time socket registrations for live updates
+  // Debounce search inside announcements
   useEffect(() => {
-    if (!socket || !isLoggedIn) return;
+    if (!adminLoggedIn || activeTab !== 'announcements') return;
+    const timer = setTimeout(() => {
+      setAnnouncementPage(1);
+      fetchAnnouncementsHistory();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [announcementSearch]);
 
-    // Join admin channel
-    socket.emit('admin-join');
+  // Setup sockets updates for Dashboard metrics
+  useEffect(() => {
+    if (!socket || !adminLoggedIn) return;
 
-    // Stats updates
-    const handleStatsUpdate = (updatedStats) => {
-      setStats(prev => ({ ...prev, ...updatedStats }));
-    };
+    // Listen for live counts changes
+    socket.on('admin-stats-update', (data) => {
+      setStats((prev) => prev ? { ...prev, ...data } : null);
+    });
 
-    // Live moderation ticker
-    const handleModerationActivity = (activity) => {
-      setTimeline(prev => {
-        const newTimeline = [...prev, activity];
-        return newTimeline.slice(-50); // Keep last 50 activities
-      });
-      // Refresh list depending on activity
-      fetchDashboardData();
+    // Listen for live warnings
+    socket.on('moderation-activity', (log) => {
+      setAuditLogs((prev) => [log, ...prev].slice(0, 150));
+      // Reload stats for today updates
+      fetchStats();
+    });
+
+    // Support chat typing indicators from user
+    socket.on('support-user-typing', (data) => {
+      if (selectedConversationToken === data.browserToken) {
+        setSupportUserTyping(data.isTyping);
+      }
+    });
+
+    // Support chat messaging receipts
+    socket.on('support-message', (msg) => {
+      // Reload conversation row counts
+      fetchConversations();
+      if (selectedConversationToken === msg.browserToken) {
+        setConversationHistory((prev) => [...prev, msg]);
+        // Update seen status automatically
+        socket.emit('support-seen', { token: msg.browserToken });
+        adminFetch(`/api/admin/support/seen/${msg.browserToken}`, {
+          method: 'POST'
+        }).catch(console.error);
+      }
+    });
+
+    socket.on('support-messages-seen', (data) => {
+      if (selectedConversationToken === data.token) {
+        setConversationHistory((prev) =>
+          prev.map((m) => (m.senderType === 'admin' ? { ...m, isSeen: true } : m))
+        );
+      }
+    });
+
+    // Reload directory tables when user registers
+    socket.on('new-user-registered', () => {
       fetchUsers();
-      if (selectedProfileId) {
-        fetchUserProfile(selectedProfileId);
-      }
-    };
-
-    // User status online/offline socket events
-    const handleUserStatusChange = ({ userId, browserToken, isOnline }) => {
-      setUsers(prevUsers => 
-        prevUsers.map(u => u.browserToken === browserToken ? { ...u, isOnline } : u)
-      );
-      // Recalculate stats online/offline
-      fetchDashboardData();
-    };
-
-    // Reset moniker identity listener
-    const handleIdentityReset = ({ userId, newName }) => {
-      setUsers(prevUsers => 
-        prevUsers.map(u => u._id === userId ? { ...u, displayName: newName } : u)
-      );
-      if (selectedProfileId === userId) {
-        setProfileData(prev => prev ? { ...prev, profile: { ...prev.profile, displayName: newName } } : null);
-      }
-    };
-
-    // Bulk action refresh updates
-    const handleBulkUpdate = () => {
-      fetchUsers();
-      fetchDashboardData();
-      if (selectedProfileId) {
-        fetchUserProfile(selectedProfileId);
-      }
-    };
-
-    socket.on('admin-stats-update', handleStatsUpdate);
-    socket.on('moderation-activity', handleModerationActivity);
-    socket.on('user-status-change', handleUserStatusChange);
-    socket.on('user-identity-reset', handleIdentityReset);
-    socket.on('bulk-moderation-update', handleBulkUpdate);
+    });
 
     return () => {
-      socket.off('admin-stats-update', handleStatsUpdate);
-      socket.off('moderation-activity', handleModerationActivity);
-      socket.off('user-status-change', handleUserStatusChange);
-      socket.off('user-identity-reset', handleIdentityReset);
-      socket.off('bulk-moderation-update', handleBulkUpdate);
+      socket.off('admin-stats-update');
+      socket.off('moderation-activity');
+      socket.off('support-user-typing');
+      socket.off('support-message');
+      socket.off('support-messages-seen');
+      socket.off('new-user-registered');
     };
-  }, [socket, isLoggedIn, selectedProfileId]);
+  }, [socket, adminLoggedIn, selectedConversationToken, csrfToken]);
 
-  // Scroll timeline to bottom
+  // Handle support message scrolling
+  const supportBottomRef = useRef(null);
   useEffect(() => {
-    if (timelineEndRef.current) {
-      timelineEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [timeline]);
+    supportBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversationHistory, supportUserTyping]);
 
-  // Authentication Login Handler
+  // Admin login authentication handler
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (!username || !password) {
-      setLoginError('Both username and password are required.');
-      return;
-    }
+    if (!usernameInput || !passwordInput) return;
 
     try {
-      setLoadingLogin(true);
-      setLoginError('');
-
+      setIsAuthenticating(true);
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: usernameInput, password: passwordInput }),
         credentials: 'include'
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        setLoginError(data.message || 'Invalid credentials.');
-      } else {
-        setIsLoggedIn(true);
-        setAdminCsrfToken(data.csrfToken || '');
-        onAdminStateChange(true);
-        setPassword('');
-      }
-    } catch (err) {
-      console.error(err);
-      setLoginError('Connection refused by server.');
-    } finally {
-      setLoadingLogin(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
-      setIsLoggedIn(false);
-      setAdminCsrfToken('');
-      onAdminStateChange(false);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Admin action triggers
-  const handleResetIdentity = async (userId) => {
-    if (!window.confirm('Reset this user\'s anonymous nickname?')) return;
-    try {
-      const res = await fetch(`/api/admin/user/${userId}/reset-identity`, {
-        method: 'POST',
-        headers: { 'x-csrf-token': adminCsrfToken },
-        credentials: 'include'
-      });
       if (res.ok) {
-        showToast('Anonymous nickname regenerated.', 'success');
-        fetchUsers();
+        setCsrfToken(data.csrfToken);
+        setAdminCsrfToken(data.csrfToken);
+        setAdminLoggedIn(true);
+        onAdminStateChange(true);
+        showToast('Successfully logged in as administrator.', 'success');
+        refreshProfile(); // refresh parent profile context
       } else {
-        const err = await res.json();
-        showToast(err.message || 'Reset failed.', 'error');
+        showToast(data.message || 'Invalid administrator credentials.', 'error');
       }
     } catch (err) {
       console.error(err);
-      showToast('Connection failed.', 'error');
+      showToast('Network error during login authentication.', 'error');
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
-  const handleToggleUserBan = async (token) => {
-    if (!window.confirm('Toggle ban status for this identity?')) return;
+  const handleLogoutClick = async () => {
     try {
-      const res = await fetch(`/api/admin/user/${token}/ban`, {
+      await fetch('/api/admin/logout', { 
         method: 'POST',
-        headers: { 'x-csrf-token': adminCsrfToken },
         credentials: 'include'
       });
+      setAdminCsrfToken('');
+      setCsrfToken('');
+      setAdminLoggedIn(false);
+      onAdminStateChange(false);
+      setUsernameInput('');
+      setPasswordInput('');
+      showToast('Logged out of administrator panel.', 'info');
+      refreshProfile(); // refresh parent profile context
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // REST GET functions
+  const fetchStats = async () => {
+    try {
+      setStatsLoading(true);
+      const res = await adminFetch('/api/admin/stats');
       if (res.ok) {
         const data = await res.json();
-        showToast(data.message || 'Ban status updated.', 'success');
-        fetchUsers();
-        fetchDashboardData();
-        if (selectedProfileId) fetchUserProfile(selectedProfileId);
+        setStats(data);
       }
     } catch (err) {
       console.error(err);
-      showToast('Connection error.', 'error');
-    }
-  };
-
-  const handleMuteUser = async (token, durationMins) => {
-    const mins = durationMins || prompt('Enter mute duration in minutes:', '60');
-    if (mins === null) return;
-    try {
-      const res = await fetch(`/api/admin/user/${token}/mute`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken 
-        },
-        body: JSON.stringify({ durationMinutes: mins }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast(`User muted for ${mins} minutes.`, 'success');
-        fetchUsers();
-        fetchDashboardData();
-        if (selectedProfileId) fetchUserProfile(selectedProfileId);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Connection error.', 'error');
-    }
-  };
-
-  const handleUnmuteUser = async (token) => {
-    try {
-      const res = await fetch(`/api/admin/user/${token}/unmute`, {
-        method: 'POST',
-        headers: { 'x-csrf-token': adminCsrfToken },
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast('User unmuted.', 'success');
-        fetchUsers();
-        fetchDashboardData();
-        if (selectedProfileId) fetchUserProfile(selectedProfileId);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Connection error.', 'error');
-    }
-  };
-
-  const handleSingleUserDelete = async (userId) => {
-    if (!window.confirm('WARNING: This will permanently delete the user and ALL their chats, confessions, and memes. Proceed?')) return;
-    try {
-      const res = await fetch('/api/admin/user/bulk-action', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken 
-        },
-        body: JSON.stringify({ userIds: [userId], action: 'delete' }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast('User and associated content fully deleted.', 'success');
-        setSelectedProfileId(null);
-        fetchUsers();
-        fetchDashboardData();
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Deletion failed.', 'error');
-    }
-  };
-
-  // Perform bulk action
-  const handleBulkActionSubmit = async () => {
-    if (selectedUserIds.length === 0) {
-      showToast('Please select at least one user.', 'warning');
-      return;
-    }
-    if (!window.confirm(`Perform bulk "${bulkAction}" on ${selectedUserIds.length} users?`)) return;
-
-    try {
-      const res = await fetch('/api/admin/user/bulk-action', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken
-        },
-        body: JSON.stringify({
-          userIds: selectedUserIds,
-          action: bulkAction,
-          durationMinutes: bulkMuteMins
-        }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast(`Bulk ${bulkAction} processed successfully.`, 'success');
-        setSelectedUserIds([]);
-        fetchUsers();
-        fetchDashboardData();
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Bulk operation failed.', 'error');
-    }
-  };
-
-  // Content deletion helper
-  const handleContentDelete = async (targetId, targetType) => {
-    if (!window.confirm(`Delete this ${targetType}?`)) return;
-    try {
-      const res = await fetch('/api/admin/content/bulk-delete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken
-        },
-        body: JSON.stringify({ targetIds: [targetId], targetType }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast(`${targetType.toUpperCase()} deleted successfully.`, 'success');
-        if (selectedProfileId) fetchUserProfile(selectedProfileId);
-        fetchDashboardData();
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Deletion failed.', 'error');
-    }
-  };
-
-  // Resolve content reports
-  const handleReportAction = async (reportId, action) => {
-    try {
-      const res = await fetch(`/api/admin/report/${reportId}/action`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken
-        },
-        body: JSON.stringify({ action }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast('Report resolved successfully.', 'success');
-        fetchDashboardData();
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Report action failed.', 'error');
-    }
-  };
-
-  // Global settings updates
-  const handleUpdateSlowmode = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/admin/slowmode', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken
-        },
-        body: JSON.stringify({ seconds: slowmodeVal }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast('Slow mode configuration updated.', 'success');
-        fetchDashboardData();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleUpdateAnnouncement = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/admin/announcement', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken
-        },
-        body: JSON.stringify({ text: announcementText }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast('Announcement updated.', 'success');
-        setAnnouncementText('');
-        fetchDashboardData();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleUpdateMaintenance = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/admin/maintenance', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-csrf-token': adminCsrfToken
-        },
-        body: JSON.stringify({ 
-          enabled: maintenanceEnabled, 
-          message: maintenanceMsgText 
-        }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        showToast('Maintenance settings updated.', 'success');
-        fetchDashboardData();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleTriggerBackup = async () => {
-    if (loadingBackup) return;
-    try {
-      setLoadingBackup(true);
-      const res = await fetch('/api/admin/backup', { 
-        method: 'POST',
-        headers: { 'x-csrf-token': adminCsrfToken },
-        credentials: 'include'
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setBackupStatus(data);
-        showToast('Database backup completed successfully.', 'success');
-        fetchDashboardData();
-      } else {
-        showToast(data.message || 'Backup failed.', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Database backup failed.', 'error');
     } finally {
-      setLoadingBackup(false);
+      setStatsLoading(false);
     }
   };
 
-  // Toggle selection checkbox
-  const handleSelectUser = (id) => {
-    setSelectedUserIds(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+  const fetchUsers = async () => {
+    try {
+      setUsersLoading(true);
+      const queryParams = new URLSearchParams({
+        page: usersPage,
+        limit: usersLimit,
+        search: usersSearch,
+        filter: usersFilter,
+        sort: usersSort
+      });
+      const res = await adminFetch(`/api/admin/users?${queryParams.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUsersList(data.users);
+        setUsersPagination(data.pagination);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const fetchReports = async () => {
+    try {
+      setReportsLoading(true);
+      const res = await adminFetch('/api/admin/reports');
+      if (res.ok) {
+        const list = await res.json();
+        setReports(list);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  const fetchConversations = async () => {
+    try {
+      setSupportLoading(true);
+      const params = new URLSearchParams({
+        page: supportPage,
+        search: supportSearch,
+        filter: supportFilter
+      });
+      const res = await adminFetch(`/api/admin/support/conversations?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(data.conversations);
+        setSupportPagination(data.pagination);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSupportLoading(false);
+    }
+  };
+
+  const fetchConversationMessages = async (token) => {
+    try {
+      const res = await adminFetch(`/api/admin/support/conversation/${token}`);
+      if (res.ok) {
+        const list = await res.json();
+        setConversationHistory(list);
+        
+        // Notify seen status
+        if (socket) {
+          socket.emit('support-seen', { token });
+        }
+        await adminFetch(`/api/admin/support/seen/${token}`, {
+          method: 'POST'
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      setSettingsLoading(true);
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        setSettings(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const fetchTrash = async () => {
+    try {
+      setTrashLoading(true);
+      const res = await adminFetch('/api/admin/trash');
+      if (res.ok) {
+        const data = await res.json();
+        setTrashItems(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTrashLoading(false);
+    }
+  };
+
+  const fetchSessions = async () => {
+    try {
+      setSessionsLoading(true);
+      const res = await adminFetch('/api/admin/sessions');
+      if (res.ok) {
+        const list = await res.json();
+        setSessionLogs(list);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const fetchAnnouncementsHistory = async () => {
+    try {
+      setAnnouncementsLoading(true);
+      const params = new URLSearchParams({
+        page: announcementPage,
+        filter: announcementFilter,
+        search: announcementSearch
+      });
+      const res = await adminFetch(`/api/admin/announcements/history?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncementHistory(data.history);
+        setAnnouncementPagination(data.pagination);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAnnouncementsLoading(false);
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    try {
+      setLogsLoading(true);
+      const res = await adminFetch('/api/admin/logs');
+      if (res.ok) {
+        const list = await res.json();
+        setAuditLogs(list);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  // Moderation Handlers
+  const handleUserSelectToggle = (id) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(id) ? prev.filter((userId) => userId !== id) : [...prev, id]
     );
   };
 
-  const handleSelectAllUsers = () => {
-    if (selectedUserIds.length === users.length) {
+  const handleSelectAllToggle = () => {
+    if (selectedUserIds.length === usersList.length) {
       setSelectedUserIds([]);
     } else {
-      setSelectedUserIds(users.map(u => u._id));
+      setSelectedUserIds(usersList.map((u) => u._id));
     }
   };
 
-  // RENDER LOGIN CARD
-  if (!isLoggedIn) {
+  const handleBulkAction = async (action, duration = 60) => {
+    if (selectedUserIds.length === 0) return;
+    const confirmMsg = `Perform bulk action "${action}" on ${selectedUserIds.length} user(s)?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const res = await adminFetch('/api/admin/user/bulk-action', {
+        method: 'POST',
+        body: JSON.stringify({
+          userIds: selectedUserIds,
+          action,
+          durationMinutes: duration,
+          banReason: 'Bulk moderation action'
+        })
+      });
+
+      if (res.ok) {
+        showToast('Bulk action completed successfully.', 'success');
+        setSelectedUserIds([]);
+        fetchUsers();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.message || 'Bulk action failed.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // User Profile drawer loader
+  const handleOpenUserDrawer = async (id) => {
+    try {
+      setDrawerLoading(true);
+      setDrawerUserId(id);
+      const res = await adminFetch(`/api/admin/user/${id}/profile`);
+      if (res.ok) {
+        const data = await res.json();
+        setDrawerData(data);
+        setAdminNoteText(data.profile.adminNotes || '');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  const handleAddWarning = async () => {
+    if (!newWarningText.trim()) return;
+    try {
+      const res = await adminFetch(`/api/admin/user/${drawerUserId}/warn`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: newWarningText })
+      });
+      if (res.ok) {
+        setNewWarningText('');
+        showToast('Warning issued successfully.', 'success');
+        handleOpenUserDrawer(drawerUserId); // reload profiles
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRemoveWarning = async (warningId) => {
+    if (!window.confirm('Remove this warning?')) return;
+    try {
+      const res = await adminFetch(`/api/admin/user/${drawerUserId}/unwarn`, {
+        method: 'POST',
+        body: JSON.stringify({ warningId })
+      });
+      if (res.ok) {
+        showToast('Warning removed.', 'success');
+        handleOpenUserDrawer(drawerUserId);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    try {
+      const res = await adminFetch(`/api/admin/user/${drawerUserId}/notes`, {
+        method: 'POST',
+        body: JSON.stringify({ notes: adminNoteText })
+      });
+      if (res.ok) {
+        showToast('Private admin notes saved successfully.', 'success');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Report actions
+  const handleReportAction = async (reportId, action, duration = 60) => {
+    const reason = window.prompt('Specify action reason (optional):');
+    try {
+      const res = await adminFetch(`/api/admin/report/${reportId}/action`, {
+        method: 'POST',
+        body: JSON.stringify({ action, durationMinutes: duration, banReason: reason })
+      });
+      if (res.ok) {
+        showToast('Report action recorded.', 'success');
+        fetchReports();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Support Reply upload files
+  const handleSupportFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        showToast('Attachment exceeds 10 MB size limit.', 'warning');
+        return;
+      }
+      setSupportAttachment(file);
+      setSupportPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemoveSupportAttachment = () => {
+    setSupportAttachment(null);
+    setSupportPreviewUrl('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSendSupportReply = async (e) => {
+    e.preventDefault();
+    if (!supportReplyText.trim() && !supportAttachment) return;
+
+    try {
+      setSupportSending(true);
+      const formData = new FormData();
+      formData.append('token', selectedConversationToken);
+      formData.append('text', supportReplyText);
+      if (supportAttachment) {
+        formData.append('attachment', supportAttachment);
+      }
+
+      const res = await adminFetch('/api/admin/support/reply', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        setSupportReplyText('');
+        handleRemoveSupportAttachment();
+        if (socket) {
+          socket.emit('support-typing', { token: selectedConversationToken, isTyping: false });
+        }
+        fetchConversationMessages(selectedConversationToken);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.message || 'Failed to deliver reply.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSupportSending(false);
+    }
+  };
+
+  // Settings Save
+  const handleSettingsSave = async (e) => {
+    e.preventDefault();
+    try {
+      setSettingsLoading(true);
+      const res = await adminFetch('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify(settings)
+      });
+      if (res.ok) {
+        showToast('Global settings updated in real time.', 'success');
+        fetchSettings();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  // Trash actions
+  const handleRestoreTrash = async (targetId, targetType) => {
+    try {
+      const res = await adminFetch('/api/admin/trash/restore', {
+        method: 'POST',
+        body: JSON.stringify({ targetId, targetType })
+      });
+      if (res.ok) {
+        showToast('Item restored successfully.', 'success');
+        fetchTrash();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handlePermanentDeleteTrash = async (targetId, targetType) => {
+    if (!window.confirm('WARNING: This will permanently delete the item. Confirm?')) return;
+    try {
+      const res = await adminFetch('/api/admin/trash/delete', {
+        method: 'POST',
+        body: JSON.stringify({ targetId, targetType })
+      });
+      if (res.ok) {
+        showToast('Item permanently deleted.', 'success');
+        fetchTrash();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Announcements CRUD Handlers
+  const handleAnnouncementSubmit = async (e) => {
+    e.preventDefault();
+    if (!newAnnouncement.title || !newAnnouncement.content) return;
+
+    try {
+      const method = editingAnnouncementId ? 'PUT' : 'POST';
+      const endpoint = editingAnnouncementId ? `/api/admin/announcement/${editingAnnouncementId}` : '/api/admin/announcement';
+
+      const res = await adminFetch(endpoint, {
+        method,
+        body: JSON.stringify(newAnnouncement)
+      });
+
+      if (res.ok) {
+        showToast(editingAnnouncementId ? 'Announcement edited successfully.' : 'Announcement scheduled.', 'success');
+        setNewAnnouncement({
+          title: '',
+          content: '',
+          type: 'homepage',
+          scheduledStart: '',
+          expiresAt: '',
+          bgColor: '#f3e8ff',
+          textColor: '#6b21a8'
+        });
+        setEditingAnnouncementId(null);
+        fetchAnnouncementsHistory();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleEditAnnouncementSelect = (ann) => {
+    setEditingAnnouncementId(ann._id);
+    setNewAnnouncement({
+      title: ann.title,
+      content: ann.content,
+      type: ann.type,
+      scheduledStart: ann.scheduledStart ? ann.scheduledStart.substring(0, 16) : '',
+      expiresAt: ann.expiresAt ? ann.expiresAt.substring(0, 16) : '',
+      bgColor: ann.bgColor || '#f3e8ff',
+      textColor: ann.textColor || '#6b21a8'
+    });
+  };
+
+  const handleSoftDeleteAnnouncement = async (id) => {
+    if (!window.confirm('Soft delete this announcement?')) return;
+    try {
+      const res = await adminFetch(`/api/admin/announcement/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        showToast('Announcement moved to trash.', 'success');
+        fetchAnnouncementsHistory();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Render Login state if not authenticated
+  if (!adminLoggedIn) {
     return (
-      <div className="flex items-center justify-center min-h-[75vh] px-4 font-inter select-none">
-        <div className="w-full max-w-md bg-zinc-900/60 border border-zinc-800 rounded-3xl p-8 shadow-2xl glass-panel relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500"></div>
-          <div className="text-center space-y-3 mb-8">
-            <div className="mx-auto h-12 w-12 bg-purple-600/10 rounded-2xl border border-purple-500/20 flex items-center justify-center text-purple-400">
-              <Lock className="h-6 w-6" />
+      <div className="w-full max-w-sm mx-auto p-4 select-none font-inter">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="p-3 bg-purple-50 rounded-2xl border border-purple-100">
+              <ShieldAlert className="h-8 w-8 text-purple-650" />
             </div>
-            <h2 className="text-2xl font-black text-zinc-100 uppercase tracking-wide">ADMINISTRATOR</h2>
-            <p className="text-xs text-zinc-500 uppercase tracking-widest">Sign in to access platform moderation controls</p>
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-800 uppercase tracking-tight">Admin Moderation Portal</h3>
+            <p className="text-xs font-semibold text-slate-450 mt-1 uppercase tracking-wider">Access strictly restricted</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4 text-left">
+          <div className="space-y-1">
+            <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Username</label>
+            <input
+              type="text"
+              placeholder="Enter administrator username"
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200/80 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none transition"
+              required
+            />
           </div>
 
-          <form onSubmit={handleLoginSubmit} className="space-y-5">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter administrator username"
-                className="w-full bg-zinc-950/80 border border-zinc-850 rounded-xl px-4 py-3 text-sm text-zinc-200 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 placeholder-zinc-700 transition"
-              />
-            </div>
+          <div className="space-y-1">
+            <label className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Password</label>
+            <input
+              type="password"
+              placeholder="Enter administrator password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200/80 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none transition"
+              required
+            />
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter administrator password"
-                className="w-full bg-zinc-950/80 border border-zinc-850 rounded-xl px-4 py-3 text-sm text-zinc-200 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 placeholder-zinc-700 transition"
-              />
-            </div>
-
-            {loginError && (
-              <div className="p-3 bg-red-950/40 border border-red-900/50 rounded-xl flex items-center gap-2.5 text-xs text-red-400">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loadingLogin}
-              className="w-full py-3 bg-purple-600 hover:bg-purple-550 disabled:bg-purple-800 text-white font-bold text-sm rounded-xl tracking-wider transition cursor-pointer flex items-center justify-center gap-2"
-            >
-              {loadingLogin ? (
-                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                'AUTHENTICATE'
-              )}
-            </button>
-          </form>
-        </div>
+          <button
+            type="submit"
+            disabled={isAuthenticating}
+            className="w-full py-3 bg-purple-600 hover:bg-purple-550 disabled:opacity-40 text-white text-[16px] font-bold uppercase tracking-widest rounded-xl transition cursor-pointer"
+          >
+            {isAuthenticating ? 'Authorizing Session...' : 'Authenticate Login'}
+          </button>
+        </form>
       </div>
     );
   }
 
-  // RENDER PRINCIPAL PANEL
   return (
-    <div className="space-y-6 font-inter pb-16 relative">
-      
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900/30 border border-zinc-800/80 rounded-2xl p-5 select-none glass-panel">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <h2 className="text-2xl font-black text-zinc-100 uppercase tracking-tight flex items-center gap-2">
-              <ShieldCheck className="h-6 w-6 text-purple-400" />
-              MODERATION CONTROL CENTER
-            </h2>
-          </div>
-          <p className="text-xs text-zinc-500 uppercase tracking-widest mt-1">Real-time college surveillance and content filters</p>
-        </div>
-        
+    <div className="min-h-screen bg-[#090a0f] text-zinc-300 font-inter flex flex-col">
+      {/* Navbar header */}
+      <div className="border-b border-zinc-800 bg-[#0e0f14] px-8 py-4 flex items-center justify-between select-none">
         <div className="flex items-center gap-3">
-          <button
-            onClick={fetchDashboardData}
-            className="px-3.5 py-1.5 bg-zinc-950/80 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+          <Logo size="sm" showText={false} className="h-9 w-9" />
+          <div>
+            <h1 className="text-md font-black tracking-tight text-white uppercase leading-none">
+              Professor Moderation Terminal
+            </h1>
+            <span className="text-[10px] font-mono text-purple-400 uppercase tracking-widest block mt-0.5">DSEU Unfiltered Oversight</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={handleLogoutClick} 
+            className="px-3.5 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 hover:text-red-300 text-xs font-bold uppercase rounded-lg border border-red-900/50 cursor-pointer"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Reload stats
-          </button>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white border border-red-800/20 rounded-xl text-xs font-bold transition cursor-pointer"
-          >
-            Log Out
+            Terminate Session
           </button>
         </div>
       </div>
 
-      {/* Tabs list menu */}
-      <div className="flex border-b border-zinc-850 gap-2 select-none">
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest border-b-2 transition ${activeTab === 'analytics' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
-        >
-          📈 Analytics & Controls
-        </button>
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest border-b-2 transition ${activeTab === 'users' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
-        >
-          👥 User Directory
-        </button>
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest border-b-2 transition relative ${activeTab === 'reports' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
-        >
-          🚨 Reports Queue
-          {reports.filter(r => r.status === 'pending').length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black h-4 w-4 rounded-full flex items-center justify-center animate-pulse">
-              {reports.filter(r => r.status === 'pending').length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('logs')}
-          className={`px-4 py-2.5 text-xs font-bold uppercase tracking-widest border-b-2 transition ${activeTab === 'logs' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
-        >
-          📋 Audit Trail Logs
-        </button>
+      {/* Tabs */}
+      <div className="bg-[#0e0f14] border-b border-zinc-800/80 flex overflow-x-auto select-none">
+        {[
+          { id: 'analytics', label: 'Dashboard', icon: ShieldCheck },
+          { id: 'users', label: 'Directory', icon: Users },
+          { id: 'reports', label: 'Reports', icon: AlertTriangle },
+          { id: 'support', label: 'Support Inbox', icon: Send },
+          { id: 'settings', label: 'Custom Settings', icon: Settings },
+          { id: 'trash', label: 'Trash Bin', icon: Trash2 },
+          { id: 'announcements', label: 'Announcements', icon: Pin },
+          { id: 'history', label: 'Login History', icon: Clock },
+          { id: 'logs', label: 'Audit Trail', icon: FileText }
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-6 py-4 text-xs font-black uppercase tracking-widest border-b-2 cursor-pointer transition whitespace-nowrap ${
+                activeTab === tab.id 
+                  ? 'border-purple-650 text-purple-400 bg-purple-950/5' 
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* RENDER ACTIVE TAB */}
-      
-      {/* TAB 1: ANALYTICS */}
-      {activeTab === 'analytics' && (
-        <div className="space-y-6">
-          {/* Stats widgets */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Total Users</span>
-              <strong className="text-2xl text-zinc-200">{stats.totalUsers || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Online Sockets</span>
-              <strong className="text-2xl text-emerald-400">{stats.onlineUsers || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Offline monikers</span>
-              <strong className="text-2xl text-zinc-400">{stats.offlineUsers || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Active Today</span>
-              <strong className="text-2xl text-indigo-400">{stats.todayActiveUsers || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Chat Messages</span>
-              <strong className="text-2xl text-zinc-300">{stats.totalChatMessages || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Confessions</span>
-              <strong className="text-2xl text-zinc-300">{stats.totalConfessions || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Memes Board</span>
-              <strong className="text-2xl text-zinc-300">{stats.totalMemes || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Poll Votes</span>
-              <strong className="text-2xl text-zinc-300">{stats.totalPolls || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Banned Monikers</span>
-              <strong className="text-2xl text-red-500">{stats.bannedUsers || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Muted Monikers</span>
-              <strong className="text-2xl text-yellow-500">{stats.mutedUsers || 0}</strong>
-            </div>
-            <div className="bg-zinc-900/20 border border-zinc-850 rounded-2xl p-4 glass-panel col-span-2">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Reports received</span>
-              <strong className="text-2xl text-red-400">{stats.totalReports || 0} ({stats.totalReportsPending || 0} pending)</strong>
-            </div>
-          </div>
-
-          {/* Today's Activity widgets */}
-          <div className="bg-zinc-900/30 border border-zinc-855 rounded-2xl p-5 select-none glass-panel">
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4">Today's Activity Breakdown</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div className="p-3 bg-zinc-950/60 rounded-xl border border-zinc-900">
-                <span className="text-[10px] text-zinc-500 block font-bold">New Users</span>
-                <strong className="text-xl text-zinc-200">{stats.today?.newUsers || 0}</strong>
-              </div>
-              <div className="p-3 bg-zinc-950/60 rounded-xl border border-zinc-900">
-                <span className="text-[10px] text-zinc-500 block font-bold">Chat Messages</span>
-                <strong className="text-xl text-zinc-200">{stats.today?.chatMessages || 0}</strong>
-              </div>
-              <div className="p-3 bg-zinc-950/60 rounded-xl border border-zinc-900">
-                <span className="text-[10px] text-zinc-500 block font-bold">Confessions</span>
-                <strong className="text-xl text-zinc-200">{stats.today?.confessions || 0}</strong>
-              </div>
-              <div className="p-3 bg-zinc-950/60 rounded-xl border border-zinc-900">
-                <span className="text-[10px] text-zinc-500 block font-bold">Meme Uploads</span>
-                <strong className="text-xl text-zinc-205">{stats.today?.memes || 0}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Main body area */}
+      <div className="flex-1 p-8 overflow-y-auto bg-[#07080b]">
+        
+        {/* Tab 1: Analytics Dashboard */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-8">
+            <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Oversight Overview</h2>
             
-            {/* Live Mod Ticker */}
-            <div className="md:col-span-2 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 flex flex-col h-[380px] glass-panel">
-              <h3 className="text-xs font-black text-cyan-400 uppercase tracking-widest border-b border-zinc-800/60 pb-3 mb-3 flex items-center gap-1.5">
-                <Play className="h-4 w-4 fill-cyan-400 text-cyan-400 rotate-90" />
-                LIVE MODERATION TIMELINE
-              </h3>
-
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-[11px] leading-relaxed">
-                {timeline.length === 0 ? (
-                  <p className="text-zinc-650 italic">Timeline listener active. Awaiting socket events...</p>
-                ) : (
-                  timeline.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-start gap-2 border-b border-zinc-900/50 pb-1.5">
-                      <span className="text-zinc-300">{item.text}</span>
-                      <span className="text-zinc-600 shrink-0">
-                        {new Date(item.timestamp).toLocaleTimeString([], { hour12: false })}
-                      </span>
-                    </div>
-                  ))
-                )}
-                <div ref={timelineEndRef} />
+            {statsLoading ? (
+              <p className="text-zinc-500 font-medium">Recalculating global statistics...</p>
+            ) : stats ? (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {[
+                  { label: "Today's Active Users", value: stats.todayActiveUsers, color: 'text-purple-400' },
+                  { label: "Online Users (Stealth-excl.)", value: stats.onlineUsers, color: 'text-emerald-400' },
+                  { label: "Banned Visitors", value: stats.bannedUsers, color: 'text-red-400' },
+                  { label: "Reports Queue", value: stats.totalReportsPending, color: 'text-amber-400' },
+                  { label: "Today's Messages", value: stats.today.chatMessages, color: 'text-zinc-300' },
+                  { label: "Today's Confessions", value: stats.today.confessions, color: 'text-zinc-300' },
+                  { label: "Today's Memes", value: stats.today.memes, color: 'text-zinc-300' },
+                  { label: "Today's Polls", value: stats.today.polls, color: 'text-zinc-300' }
+                ].map((card, i) => (
+                  <div key={i} className="p-5 bg-[#0e0f14] border border-zinc-800/80 rounded-2xl shadow-2xl">
+                    <span className="text-[11px] text-zinc-650 font-bold uppercase tracking-wider block">{card.label}</span>
+                    <span className={`text-3xl font-black block mt-2 ${card.color}`}>{card.value}</span>
+                  </div>
+                ))}
               </div>
-            </div>
+            ) : null}
 
-            {/* Quick config settings */}
-            <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-4 glass-panel">
-              <h3 className="text-xs font-black text-violet-400 uppercase tracking-widest border-b border-zinc-800/60 pb-3">
-                ⚙️ GLOBAL CONTROLS
-              </h3>
-              
-              {/* Slowmode */}
-              <form onSubmit={handleUpdateSlowmode} className="space-y-2">
-                <label className="text-[10px] text-zinc-500 font-bold flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" />
-                  CHAT SLOWMODE (SECONDS)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={slowmodeVal}
-                    onChange={(e) => setSlowmodeVal(e.target.value)}
-                    min="0"
-                    max="300"
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-1.5 text-xs text-zinc-200"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 bg-violet-650 hover:bg-violet-550 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
-                  >
-                    Set
-                  </button>
+            {stats && (
+              <div className="mt-8 space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Service Status Logs</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {[
+                    { service: 'Express Server', status: stats.systems.server, statusColor: 'bg-emerald-500' },
+                    { service: 'MongoDB Node', status: stats.systems.db, statusColor: 'bg-emerald-500' },
+                    { service: 'Cloudinary CDN', status: stats.systems.cloudinary, statusColor: 'bg-emerald-500' },
+                    { service: 'Socket.IO Core', status: stats.systems.sockets, statusColor: 'bg-emerald-500' }
+                  ].map((s, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-4 bg-[#0e0f14] border border-zinc-800/80 rounded-xl">
+                      <span className="text-xs font-bold text-zinc-400">{s.service}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-2 w-2 rounded-full ${s.statusColor}`}></span>
+                        <span className="text-xs font-mono text-zinc-300">{s.status}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </form>
+              </div>
+            )}
+          </div>
+        )}
 
-              {/* Announcement */}
-              <form onSubmit={handleUpdateAnnouncement} className="space-y-2 pt-2 border-t border-zinc-850">
-                <label className="text-[10px] text-zinc-500 font-bold flex items-center gap-1.5">
-                  <Megaphone className="h-3.5 w-3.5" />
-                  PIN CAMPUS ANNOUNCEMENT
-                </label>
-                <div className="flex gap-2">
+        {/* Tab 2: User Directory */}
+        {activeTab === 'users' && (
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h2 className="text-[28px] font-black uppercase text-white tracking-tight">User Directory</h2>
+              
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-600" />
                   <input
                     type="text"
-                    value={announcementText}
-                    onChange={(e) => setAnnouncementText(e.target.value)}
-                    placeholder="e.g. Server maintenance..."
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-700"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 bg-violet-650 hover:bg-violet-550 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
-                  >
-                    Pin
-                  </button>
-                </div>
-              </form>
-
-              {/* Maintenance Toggle */}
-              <form onSubmit={handleUpdateMaintenance} className="space-y-3 pt-2 border-t border-zinc-850">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] text-zinc-500 font-bold flex items-center gap-1.5">
-                    <ShieldAlert className="h-3.5 w-3.5" />
-                    MAINTENANCE MODE
-                  </label>
-                  <input
-                    type="checkbox"
-                    checked={maintenanceEnabled}
-                    onChange={(e) => setMaintenanceEnabled(e.target.checked)}
-                    className="h-4.5 w-4.5 accent-purple-650 rounded bg-zinc-900 border-zinc-800"
+                    placeholder="Search by nickname/token..."
+                    value={usersSearch}
+                    onChange={(e) => setUsersSearch(e.target.value)}
+                    className="bg-[#0e0f14] border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-purple-650"
                   />
                 </div>
-                {maintenanceEnabled && (
-                  <div className="space-y-2">
-                    <textarea
-                      value={maintenanceMsgText}
-                      onChange={(e) => setMaintenanceMsgText(e.target.value)}
-                      placeholder="Enter maintenance page description..."
-                      rows="2"
-                      className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-700 resize-none"
-                    />
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  className="w-full py-1.5 bg-purple-650 hover:bg-purple-550 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
-                >
-                  Save Mode Settings
-                </button>
-              </form>
 
-              {/* Backup Trigger */}
-              <div className="pt-2 border-t border-zinc-850 space-y-2">
-                <span className="text-[10px] text-zinc-550 font-bold block">DATABASE BACKUP</span>
-                <button
-                  onClick={handleTriggerBackup}
-                  disabled={loadingBackup}
-                  className="w-full py-1.5 bg-zinc-950 border border-zinc-800 hover:bg-zinc-905 disabled:bg-zinc-950 text-zinc-300 hover:text-zinc-200 text-xs font-semibold rounded-xl transition cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {loadingBackup ? (
-                    <div className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    'Run DB Backup Now'
-                  )}
-                </button>
-                {backupStatus && (
-                  <div className="text-[10px] text-zinc-500 font-mono text-center">
-                    Last backup: {backupStatus.status === 'success' ? `✅ ${backupStatus.sizeKb} KB` : '❌ Failed'} - {new Date(backupStatus.timestamp).toLocaleString()}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: USER DIRECTORY TABLE */}
-      {activeTab === 'users' && (
-        <div className="space-y-6">
-          {/* Filters Bar */}
-          <div className="bg-zinc-900/30 border border-zinc-800/80 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 glass-panel select-none">
-            <form onSubmit={handleUserSearchSubmit} className="flex gap-2 w-full md:w-auto">
-              <div className="relative w-full md:w-80">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-600" />
-                <input
-                  type="text"
-                  placeholder="Search by nickname, ID, token..."
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-purple-650 transition"
-                />
-              </div>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-purple-655 hover:bg-purple-550 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
-              >
-                Search
-              </button>
-            </form>
-
-            <div className="flex flex-wrap gap-3 w-full md:w-auto">
-              {/* Filter */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest">Filter</span>
                 <select
-                  value={userFilter}
-                  onChange={(e) => { setUserFilter(e.target.value); setUserPage(1); }}
-                  className="bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none cursor-pointer"
+                  value={usersFilter}
+                  onChange={(e) => { setUsersFilter(e.target.value); setUsersPage(1); }}
+                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
                 >
                   <option value="all">All Users</option>
-                  <option value="online">Online Users</option>
-                  <option value="offline">Offline Users</option>
-                  <option value="muted">Muted Users</option>
-                  <option value="banned">Banned Users</option>
-                  <option value="reported">Reported Users</option>
+                  <option value="online">Online</option>
+                  <option value="offline">Offline</option>
+                  <option value="muted">Muted</option>
+                  <option value="banned">Banned</option>
                 </select>
-              </div>
 
-              {/* Sort */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest">Sort</span>
                 <select
-                  value={userSort}
-                  onChange={(e) => { setUserSort(e.target.value); setUserPage(1); }}
-                  className="bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none cursor-pointer"
+                  value={usersSort}
+                  onChange={(e) => { setUsersSort(e.target.value); setUsersPage(1); }}
+                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
                 >
-                  <option value="newest">Newest</option>
-                  <option value="oldest">Oldest</option>
+                  <option value="newest">Newest Join</option>
+                  <option value="oldest">Oldest Join</option>
                   <option value="most_active">Most Active</option>
-                  <option value="least_active">Least Active</option>
                 </select>
               </div>
             </div>
-          </div>
 
-          {/* Bulk Actions Panel */}
-          {selectedUserIds.length > 0 && (
-            <div className="bg-purple-950/20 border border-purple-900/40 rounded-xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in select-none">
-              <div className="flex items-center gap-2">
-                <Layers className="h-5 w-5 text-purple-400" />
-                <span className="text-xs font-bold text-purple-300">
-                  {selectedUserIds.length} users selected for bulk moderation
-                </span>
-              </div>
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                <select
-                  value={bulkAction}
-                  onChange={(e) => setBulkAction(e.target.value)}
-                  className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-zinc-300 focus:outline-none cursor-pointer"
-                >
-                  <option value="ban">Ban selected</option>
-                  <option value="unban">Unban selected</option>
-                  <option value="mute">Mute selected</option>
-                  <option value="unmute">Unmute selected</option>
-                  <option value="reset-identity">Reset nickname</option>
-                  <option value="delete">Delete selected accounts</option>
-                  <option value="delete-messages">Delete all user chats</option>
-                  <option value="delete-memes">Delete all user memes</option>
-                  <option value="delete-confessions">Delete all user confessions</option>
-                  <option value="delete-polls">Delete all user polls</option>
-                </select>
-                {bulkAction === 'mute' && (
-                  <input
-                    type="number"
-                    value={bulkMuteMins}
-                    onChange={(e) => setBulkMuteMins(e.target.value)}
-                    placeholder="Mins"
-                    min="1"
-                    className="w-16 bg-zinc-950 border border-zinc-800 rounded-xl px-2 py-1.5 text-xs text-zinc-200 text-center"
-                  />
-                )}
-                <button
-                  onClick={handleBulkActionSubmit}
-                  className="px-4 py-1.5 bg-purple-650 hover:bg-purple-550 text-white text-xs font-bold rounded-xl transition cursor-pointer"
-                >
-                  Apply Action
-                </button>
-                <button
-                  onClick={() => setSelectedUserIds([])}
-                  className="px-3 py-1.5 bg-zinc-950 border border-zinc-850 hover:bg-zinc-900 text-zinc-400 text-xs font-medium rounded-xl transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Users Table */}
-          <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden glass-panel">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs select-none">
-                <thead>
-                  <tr className="bg-zinc-950/80 border-b border-zinc-850 text-zinc-550 uppercase tracking-widest text-[10px] font-bold">
-                    <th className="py-4 px-4 w-12 text-center">
-                      <input
-                        type="checkbox"
-                        checked={users.length > 0 && selectedUserIds.length === users.length}
-                        onChange={handleSelectAllUsers}
-                        className="h-4 w-4 accent-purple-600 rounded bg-zinc-900 border-zinc-800 cursor-pointer"
-                      />
-                    </th>
-                    <th className="py-4 px-4">Anonymous nickname</th>
-                    <th className="py-4 px-4">Browser Token / ID</th>
-                    <th className="py-4 px-4 text-center">Online Status</th>
-                    <th className="py-4 px-4">Counters (Chats/Conf/Memes)</th>
-                    <th className="py-4 px-4">Ban / Mute status</th>
-                    <th className="py-4 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-900/40 text-zinc-300">
-                  {users.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="py-8 text-center text-zinc-600 italic">
-                        No registered users found matching the search/filter criteria.
-                      </td>
-                    </tr>
-                  ) : (
-                    users.map((u) => (
-                      <tr key={u._id} className="hover:bg-zinc-950/20 transition-colors">
-                        <td className="py-3.5 px-4 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedUserIds.includes(u._id)}
-                            onChange={() => handleSelectUser(u._id)}
-                            className="h-4 w-4 accent-purple-600 rounded bg-zinc-900 border-zinc-800 cursor-pointer"
-                          />
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-zinc-200 flex items-center gap-1.5">
-                            {u.displayName}
-                            {u.isBanned && (
-                              <span className="px-1.5 py-0.5 bg-red-950/60 border border-red-900 text-red-500 text-[9px] font-black rounded-md uppercase">
-                                Banned
-                              </span>
-                            )}
-                            {u.mutedUntil && new Date(u.mutedUntil) > new Date() && (
-                              <span className="px-1.5 py-0.5 bg-yellow-950/60 border border-yellow-900 text-yellow-500 text-[9px] font-black rounded-md uppercase animate-pulse">
-                                Muted
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-zinc-600">Joined: {new Date(u.createdAt).toLocaleDateString()}</span>
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-[10px] text-zinc-500">
-                          <div className="group relative cursor-help">
-                            <span>ID: {u._id}</span>
-                            <div className="hidden group-hover:block absolute bg-zinc-950 border border-zinc-800 text-[9px] text-zinc-400 p-1.5 rounded-lg -top-8 left-0 z-20 whitespace-nowrap">
-                              Token: {u.browserToken}
-                            </div>
-                          </div>
-                          <span className="block text-[9px] text-zinc-600">Active: {new Date(u.lastActive).toLocaleTimeString([], { hour12: false })}</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          {u.isOnline ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-950/50 border border-emerald-900 text-emerald-400 font-bold text-[9px] uppercase tracking-wide">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                              Online
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-zinc-950/50 border border-zinc-850 text-zinc-500 font-bold text-[9px] uppercase tracking-wide">
-                              Offline
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-[11px] text-zinc-450">
-                          <span>💬 {u.chatCount || 0}</span>
-                          <span className="mx-2">|</span>
-                          <span>📝 {u.confessionCount || 0}</span>
-                          <span className="mx-2">|</span>
-                          <span>🖼️ {u.memeCount || 0}</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-zinc-450">
-                          {u.isBanned ? (
-                            <span className="text-red-500 font-semibold block text-[10px]">Permanently Banned</span>
-                          ) : (
-                            <span className="text-zinc-600 block text-[10px]">Ban clear</span>
-                          )}
-                          {u.mutedUntil && new Date(u.mutedUntil) > new Date() ? (
-                            <span className="text-yellow-500 text-[10px] block">
-                              Muted until {new Date(u.mutedUntil).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          ) : (
-                            <span className="text-zinc-650 text-[10px] block">Mute clear</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => setSelectedProfileId(u._id)}
-                              title="View full Profile timeline history"
-                              className="p-1 bg-zinc-950 hover:bg-zinc-900 text-indigo-400 hover:text-indigo-300 border border-zinc-850 rounded-lg transition cursor-pointer"
-                            >
-                              <Eye className="h-4.5 w-4.5" />
-                            </button>
-                            <button
-                              onClick={() => handleResetIdentity(u._id)}
-                              title="Reset Moniker Display Name"
-                              className="p-1 bg-zinc-950 hover:bg-zinc-900 text-teal-400 hover:text-teal-300 border border-zinc-850 rounded-lg transition cursor-pointer"
-                            >
-                              <RefreshCw className="h-4.5 w-4.5" />
-                            </button>
-                            {u.mutedUntil && new Date(u.mutedUntil) > new Date() ? (
-                              <button
-                                onClick={() => handleUnmuteUser(u.browserToken)}
-                                title="Unmute User"
-                                className="p-1 bg-zinc-950 hover:bg-zinc-900 text-yellow-500 hover:text-yellow-400 border border-zinc-850 rounded-lg transition cursor-pointer"
-                              >
-                                <Check className="h-4.5 w-4.5" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleMuteUser(u.browserToken)}
-                                title="Mute User"
-                                className="p-1 bg-zinc-950 hover:bg-zinc-900 text-yellow-600 hover:text-yellow-550 border border-zinc-850 rounded-lg transition cursor-pointer"
-                              >
-                                <Clock className="h-4.5 w-4.5" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleToggleUserBan(u.browserToken)}
-                              title={u.isBanned ? 'Unban User' : 'Ban User'}
-                              className={`p-1 bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 rounded-lg transition cursor-pointer ${u.isBanned ? 'text-emerald-500 hover:text-emerald-400' : 'text-red-500 hover:text-red-400'}`}
-                            >
-                              <Ban className="h-4.5 w-4.5" />
-                            </button>
-                            <button
-                              onClick={() => handleSingleUserDelete(u._id)}
-                              title="Delete Account & Content"
-                              className="p-1 bg-zinc-950 hover:bg-zinc-900 text-red-600 hover:text-red-550 border border-zinc-850 rounded-lg transition cursor-pointer"
-                            >
-                              <Trash2 className="h-4.5 w-4.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            
-            {/* Pagination Controls */}
-            {userPagination.totalPages > 1 && (
-              <div className="bg-zinc-950/80 px-4 py-3 border-t border-zinc-855 flex items-center justify-between select-none">
-                <span className="text-zinc-550 text-[10px]">
-                  Showing Page {userPagination.currentPage} of {userPagination.totalPages} (Total {userPagination.totalUsers} users)
-                </span>
+            {/* Bulk options bar */}
+            {selectedUserIds.length > 0 && (
+              <div className="p-4 bg-purple-950/15 border border-purple-500/20 rounded-xl flex items-center justify-between text-xs select-none">
+                <span className="font-bold text-purple-400 uppercase tracking-widest">{selectedUserIds.length} users selected</span>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setUserPage(prev => Math.max(1, prev - 1))}
-                    disabled={userPage === 1}
-                    className="p-1.5 bg-zinc-900 border border-zinc-800 disabled:opacity-40 text-zinc-400 hover:text-zinc-200 rounded-xl transition cursor-pointer"
-                  >
-                    <ChevronLeft className="h-4.5 w-4.5" />
-                  </button>
-                  <button
-                    onClick={() => setUserPage(prev => Math.min(userPagination.totalPages, prev + 1))}
-                    disabled={userPage === userPagination.totalPages}
-                    className="p-1.5 bg-zinc-900 border border-zinc-800 disabled:opacity-40 text-zinc-400 hover:text-zinc-200 rounded-xl transition cursor-pointer"
-                  >
-                    <ChevronRight className="h-4.5 w-4.5" />
-                  </button>
+                  <button onClick={() => handleBulkAction('ban')} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/50 cursor-pointer uppercase font-black">Ban</button>
+                  <button onClick={() => handleBulkAction('unban')} className="px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-400 rounded-lg border border-emerald-900/50 cursor-pointer uppercase font-black">Unban</button>
+                  <button onClick={() => handleBulkAction('mute', 60)} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg border border-zinc-850 cursor-pointer uppercase font-black">Mute 1h</button>
+                  <button onClick={() => handleBulkAction('unmute')} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg border border-zinc-850 cursor-pointer uppercase font-black">Unmute</button>
+                  <button onClick={() => handleBulkAction('shadow-ban')} className="px-3 py-1.5 bg-amber-950/40 hover:bg-amber-900/40 text-amber-400 rounded-lg border border-amber-900/50 cursor-pointer uppercase font-black">Shadow Ban</button>
+                  <button onClick={() => handleBulkAction('unshadow-ban')} className="px-3 py-1.5 bg-amber-950/40 hover:bg-amber-900/40 text-amber-400 rounded-lg border border-amber-900/50 cursor-pointer uppercase font-black">Unshadow</button>
+                  <button onClick={() => handleBulkAction('delete')} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/50 cursor-pointer uppercase font-black">Delete Accounts</button>
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* TAB 3: REPORTS QUEUE */}
-      {activeTab === 'reports' && (
-        <div className="space-y-4">
-          {reports.filter(r => r.status === 'pending').length === 0 ? (
-            <div className="bg-zinc-900/30 border border-zinc-800/80 rounded-2xl p-8 text-center text-zinc-650 italic select-none glass-panel">
-              🎉 No pending reports in the queue.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {reports.filter(r => r.status === 'pending').map((rep) => (
-                <div key={rep._id} className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 space-y-4 glass-panel flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-start gap-2">
-                      <span className="px-2 py-0.5 bg-red-950/50 border border-red-900 text-red-500 font-bold text-[9px] uppercase rounded-md tracking-wider">
-                        {rep.targetType} reported
-                      </span>
-                      <span className="text-[10px] text-zinc-600 font-mono">
-                        {new Date(rep.createdAt).toLocaleString()}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-zinc-950/60 rounded-xl border border-zinc-900/80 font-mono text-[11px] text-zinc-400 break-words max-h-32 overflow-y-auto">
-                      <span className="text-zinc-550 block text-[9px] font-bold uppercase tracking-wider mb-1">Target ID: {rep.targetId}</span>
-                      {rep.targetDetails || 'Content details unavailable.'}
-                    </div>
-
-                    <div className="text-[10px] text-zinc-500">
-                      <span className="block font-bold">Reason: <span className="text-zinc-300 font-normal">{rep.reason}</span></span>
-                      <span className="block font-bold mt-0.5">Reporter Token: <span className="text-zinc-300 font-mono font-normal">{rep.reporterToken}</span></span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-3 border-t border-zinc-900/80 justify-end">
-                    <button
-                      onClick={() => handleReportAction(rep._id, 'ignore')}
-                      className="px-3 py-1.5 bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 text-zinc-450 hover:text-zinc-200 text-[10px] font-bold rounded-xl transition cursor-pointer"
-                    >
-                      Ignore Report
-                    </button>
-                    <button
-                      onClick={() => handleReportAction(rep._id, 'mute_user')}
-                      className="px-3 py-1.5 bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 text-yellow-600 hover:text-yellow-500 text-[10px] font-bold rounded-xl transition cursor-pointer"
-                    >
-                      Mute Creator
-                    </button>
-                    <button
-                      onClick={() => handleReportAction(rep._id, 'ban_user')}
-                      className="px-3 py-1.5 bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 text-red-650 hover:text-red-500 text-[10px] font-bold rounded-xl transition cursor-pointer"
-                    >
-                      Ban Creator
-                    </button>
-                    <button
-                      onClick={() => handleReportAction(rep._id, 'delete_content')}
-                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold rounded-xl transition cursor-pointer flex items-center gap-1"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete Target Content
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB 4: AUDIT LOGS */}
-      {activeTab === 'logs' && (
-        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden glass-panel select-none">
-          <div className="p-4 bg-zinc-950/80 border-b border-zinc-850 flex justify-between items-center">
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
-              <FileText className="h-4.5 w-4.5" />
-              SYSTEM AUDIT TRAIL LOG
-            </h3>
-            <span className="text-[10px] text-zinc-550 font-mono">Showing last 200 logs</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-zinc-950/40 border-b border-zinc-900 text-zinc-500 uppercase tracking-widest text-[9px] font-bold">
-                  <th className="py-3 px-4">Time</th>
-                  <th className="py-3 px-4">Administrator</th>
-                  <th className="py-3 px-4">Action Type</th>
-                  <th className="py-3 px-4">Action description logs</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-955/30 text-zinc-300 font-mono text-[10px]">
-                {auditLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" className="py-6 text-center text-zinc-650 italic">
-                      No system admin action logs found.
-                    </td>
-                  </tr>
-                ) : (
-                  auditLogs.map((log) => (
-                    <tr key={log._id} className="hover:bg-zinc-950/10">
-                      <td className="py-2.5 px-4 text-zinc-600 whitespace-nowrap">
-                        {new Date(log.createdAt).toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-4 text-violet-400 font-bold">
-                        {log.adminUsername}
-                      </td>
-                      <td className="py-2.5 px-4">
-                        <span className="px-1.5 py-0.5 bg-zinc-950 rounded border border-zinc-850 text-zinc-400 uppercase text-[9px] font-bold">
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-4 text-zinc-400 break-words">
-                        {log.details}
-                      </td>
+            {/* Users Directory Table */}
+            {usersLoading ? (
+              <p className="text-zinc-500 font-medium">Scanning network database...</p>
+            ) : (
+              <div className="bg-[#0e0f14] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-2xl">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-500 select-none bg-zinc-950/50 font-bold uppercase tracking-wider">
+                      <th className="p-4 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.length === usersList.length && usersList.length > 0}
+                          onChange={handleSelectAllToggle}
+                          className="h-4 w-4 cursor-pointer accent-purple-650"
+                        />
+                      </th>
+                      <th className="p-4">Anonymous Nickname</th>
+                      <th className="p-4">Oversight Status</th>
+                      <th className="p-4">Last Seen Address</th>
+                      <th className="p-4 text-center">Messages</th>
+                      <th className="p-4 text-center">Confessions</th>
+                      <th className="p-4 text-center">Memes</th>
+                      <th className="p-4 text-center">Warnings</th>
+                      <th className="p-4 text-center">Actions</th>
                     </tr>
-                  ))
+                  </thead>
+                  <tbody>
+                    {usersList.length === 0 ? (
+                      <tr>
+                        <td colSpan="9" className="p-8 text-center text-zinc-650 font-semibold uppercase tracking-wider">No users matching search filters found.</td>
+                      </tr>
+                    ) : (
+                      usersList.map((u) => (
+                        <tr key={u._id} className="border-b border-zinc-850 hover:bg-zinc-900/30 transition duration-150">
+                          <td className="p-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedUserIds.includes(u._id)}
+                              onChange={() => handleUserSelectToggle(u._id)}
+                              className="h-4 w-4 cursor-pointer accent-purple-650"
+                            />
+                          </td>
+                          <td className="p-4 font-bold text-zinc-200">
+                            <div className="flex items-center gap-2">
+                              <span className={`h-2 w-2 rounded-full ${u.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-700'}`}></span>
+                              <span>{u.displayName}</span>
+                              {u.isShadowBanned && (
+                                <span className="text-[9px] font-black uppercase text-red-500 bg-red-950/40 border border-red-900/50 px-1 rounded">Shadow</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            {u.isBanned ? (
+                              <span className="text-red-400 font-bold uppercase tracking-wider block text-[10px]">BANNED</span>
+                            ) : u.mutedUntil && new Date(u.mutedUntil) > new Date() ? (
+                              <span className="text-amber-500 font-bold uppercase tracking-wider block text-[10px]">MUTED</span>
+                            ) : (
+                              <span className="text-emerald-500 font-bold uppercase tracking-wider block text-[10px]">ACTIVE</span>
+                            )}
+                          </td>
+                          <td className="p-4 font-mono text-[10px] text-zinc-500 max-w-[150px] truncate">
+                            IP: {u.ip || 'Unknown'}
+                          </td>
+                          <td className="p-4 text-center font-semibold text-zinc-400">{u.chatCount}</td>
+                          <td className="p-4 text-center font-semibold text-zinc-400">{u.confessionCount}</td>
+                          <td className="p-4 text-center font-semibold text-zinc-400">{u.memeCount}</td>
+                          <td className="p-4 text-center font-bold text-zinc-400">
+                            {u.warnings?.length > 0 ? (
+                              <span className="text-red-400">{u.warnings.length}</span>
+                            ) : '-'}
+                          </td>
+                          <td className="p-4 text-center">
+                            <button
+                              onClick={() => handleOpenUserDrawer(u._id)}
+                              className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg border border-zinc-850 cursor-pointer"
+                            >
+                              Oversight Profile
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+                
+                {/* Pagination */}
+                {usersPagination.totalPages > 1 && (
+                  <div className="p-4 bg-zinc-950/50 border-t border-zinc-850 flex items-center justify-between select-none">
+                    <span className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">
+                      Page {usersPagination.currentPage} of {usersPagination.totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
+                        disabled={usersPagination.currentPage === 1}
+                        className="p-1.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 text-zinc-400 rounded-lg cursor-pointer"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setUsersPage((p) => Math.min(usersPagination.totalPages, p + 1))}
+                        disabled={usersPagination.currentPage === usersPagination.totalPages}
+                        className="p-1.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 text-zinc-400 rounded-lg cursor-pointer"
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
                 )}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* USER PROFILE SIDE DRAWER OVERLAY */}
-      {selectedProfileId && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-end font-inter animate-fade-in select-none">
-          <div className="w-full max-w-2xl bg-zinc-900 border-l border-zinc-800 h-full flex flex-col justify-between shadow-2xl relative">
-            <button
-              onClick={() => { setSelectedProfileId(null); setProfileData(null); }}
-              className="absolute top-4 right-4 p-2 bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 hover:text-zinc-200 rounded-full text-zinc-400 transition cursor-pointer"
-            >
-              <X className="h-5 w-5" />
-            </button>
+        {/* Tab 3: Reports */}
+        {activeTab === 'reports' && (
+          <div className="space-y-6">
+            <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Oversight Reports Queue</h2>
 
-            {loadingProfile || !profileData ? (
-              <div className="flex-1 flex flex-col items-center justify-center space-y-3">
-                <div className="h-8 w-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-xs font-bold text-zinc-550 uppercase tracking-widest animate-pulse">Retrieving profile...</span>
+            {reportsLoading ? (
+              <p className="text-zinc-500 font-medium">Scanning incoming reports...</p>
+            ) : reports.length === 0 ? (
+              <div className="p-8 text-center bg-[#0e0f14] border border-zinc-800/80 rounded-2xl text-zinc-500 uppercase tracking-widest font-bold">
+                Oversight Reports Queue is currently empty.
               </div>
             ) : (
-              <div className="flex-1 flex flex-col h-full overflow-hidden">
-                {/* Profile Header */}
-                <div className="p-6 bg-zinc-950/80 border-b border-zinc-850 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 bg-purple-650/15 border border-purple-500/20 rounded-2xl flex items-center justify-center text-xl text-purple-400 font-bold font-mono">
-                      {profileData.profile.displayName.substring(0, 2).toUpperCase()}
+              <div className="grid grid-cols-1 gap-4">
+                {reports.map((rep) => (
+                  <div key={rep._id} className="p-5 bg-[#0e0f14] border border-zinc-800/80 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-amber-500 bg-amber-950/40 border border-amber-900/50 px-1.5 py-0.2 rounded tracking-widest">
+                          REPORTED {rep.targetType}
+                        </span>
+                        <span className="text-[10px] font-mono text-zinc-650">ID: {rep.targetId}</span>
+                      </div>
+                      <p className="text-zinc-200 text-xs font-semibold leading-relaxed pt-1">
+                        Report Reason: <span className="text-amber-400 italic">"{rep.reason}"</span>
+                      </p>
+                      <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider pt-1">
+                        Target details: {rep.targetDetails}
+                      </p>
                     </div>
-                    <div>
-                      <h3 className="text-lg font-black text-zinc-150 flex items-center gap-2">
-                        {profileData.profile.displayName}
-                        {profileData.profile.isOnline ? (
-                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Online"></span>
-                        ) : (
-                          <span className="h-2 w-2 rounded-full bg-zinc-700" title="Offline"></span>
-                        )}
-                      </h3>
-                      <p className="text-[10px] text-zinc-650 font-mono">User ID: {profileData.profile._id}</p>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px]">
-                    <div className="p-2 bg-zinc-900/50 rounded-xl border border-zinc-855">
-                      <span className="text-zinc-600 block uppercase tracking-wider font-bold">Join Date</span>
-                      <span className="text-zinc-300 font-bold">{new Date(profileData.profile.createdAt).toLocaleDateString()}</span>
-                    </div>
-                    <div className="p-2 bg-zinc-900/50 rounded-xl border border-zinc-855">
-                      <span className="text-zinc-600 block uppercase tracking-wider font-bold">Last Active</span>
-                      <span className="text-zinc-300 font-bold">{new Date(profileData.profile.lastActive).toLocaleTimeString([], { hour12: false })}</span>
-                    </div>
-                    <div className="p-2 bg-zinc-900/50 rounded-xl border border-zinc-855 col-span-2">
-                      <span className="text-zinc-600 block uppercase tracking-wider font-bold">Browser Token</span>
-                      <span className="text-zinc-350 font-mono">{profileData.profile.browserToken}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleReportAction(rep._id, 'ignore')} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-850 rounded-lg cursor-pointer uppercase font-bold text-[10px]">Ignore</button>
+                      <button onClick={() => handleReportAction(rep._id, 'delete_content')} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/50 cursor-pointer uppercase font-bold text-[10px]">Delete post</button>
+                      <button onClick={() => handleReportAction(rep._id, 'ban_user')} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/50 cursor-pointer uppercase font-bold text-[10px]">Ban author</button>
+                      <button onClick={() => handleReportAction(rep._id, 'mute_user', 60)} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg border border-zinc-850 cursor-pointer uppercase font-bold text-[10px]">Mute author 1h</button>
                     </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-                  {/* Profile Actions */}
-                  <div className="flex gap-2">
-                    {profileData.profile.isBanned ? (
-                      <button
-                        onClick={() => handleToggleUserBan(profileData.profile.browserToken)}
-                        className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition cursor-pointer"
-                      >
-                        Unban Account
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleToggleUserBan(profileData.profile.browserToken)}
-                        className="flex-1 py-1.5 bg-red-650 hover:bg-red-550 text-white text-xs font-bold rounded-xl transition cursor-pointer"
-                      >
-                        Ban Account
-                      </button>
-                    )}
-                    {profileData.profile.mutedUntil && new Date(profileData.profile.mutedUntil) > new Date() ? (
-                      <button
-                        onClick={() => handleUnmuteUser(profileData.profile.browserToken)}
-                        className="flex-1 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-bold rounded-xl transition cursor-pointer"
-                      >
-                        Unmute Account
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleMuteUser(profileData.profile.browserToken)}
-                        className="flex-1 py-1.5 bg-zinc-900 hover:bg-zinc-850 text-yellow-600 hover:text-yellow-500 border border-zinc-800 text-xs font-bold rounded-xl transition cursor-pointer"
-                      >
-                        Mute Account
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleResetIdentity(profileData.profile._id)}
-                      className="flex-1 py-1.5 bg-zinc-900 hover:bg-zinc-850 text-teal-400 hover:text-teal-300 border border-zinc-800 text-xs font-bold rounded-xl transition cursor-pointer"
-                    >
-                      Reset Moniker
-                    </button>
-                    <button
-                      onClick={() => handleSingleUserDelete(profileData.profile._id)}
-                      className="px-3.5 py-1.5 bg-red-950 hover:bg-red-900 text-red-500 border border-red-900/50 text-xs font-bold rounded-xl transition cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+        {/* Tab 4: Support Inbox Messenger */}
+        {activeTab === 'support' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[72vh] overflow-hidden">
+            {/* List side */}
+            <div className="bg-[#0e0f14] border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden">
+              <div className="p-4 border-b border-zinc-800/80 bg-zinc-950/50 flex flex-col gap-3">
+                <div className="relative select-none">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-700" />
+                  <input
+                    type="text"
+                    placeholder="Search conversations..."
+                    value={supportSearch}
+                    onChange={(e) => setSupportSearch(e.target.value)}
+                    className="w-full bg-[#121318] border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-purple-650"
+                  />
                 </div>
-
-                {/* Profile Tabs */}
-                <div className="flex border-b border-zinc-850 px-6 gap-1 bg-zinc-950/40 text-[10px] select-none font-bold uppercase tracking-wider">
-                  <button
-                    onClick={() => setProfileTab('chats')}
-                    className={`px-3 py-2 border-b-2 transition ${profileTab === 'chats' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-550'}`}
-                  >
-                    Chats ({profileData.chats.length})
-                  </button>
-                  <button
-                    onClick={() => setProfileTab('confessions')}
-                    className={`px-3 py-2 border-b-2 transition ${profileTab === 'confessions' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-555'}`}
-                  >
-                    Confessions ({profileData.confessions.length})
-                  </button>
-                  <button
-                    onClick={() => setProfileTab('memes')}
-                    className={`px-3 py-2 border-b-2 transition ${profileTab === 'memes' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-550'}`}
-                  >
-                    Memes ({profileData.memes.length})
-                  </button>
-                  <button
-                    onClick={() => setProfileTab('polls')}
-                    className={`px-3 py-2 border-b-2 transition ${profileTab === 'polls' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-550'}`}
-                  >
-                    Poll Votes ({profileData.polls.length})
-                  </button>
-                  <button
-                    onClick={() => setProfileTab('reports')}
-                    className={`px-3 py-2 border-b-2 transition ${profileTab === 'reports' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-550'}`}
-                  >
-                    Reports ({profileData.reports.length})
-                  </button>
-                  <button
-                    onClick={() => setProfileTab('logs')}
-                    className={`px-3 py-2 border-b-2 transition ${profileTab === 'logs' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-550'}`}
-                  >
-                    Timeline History ({profileData.logs.length})
-                  </button>
+                <div className="flex gap-2">
+                  <button onClick={() => { setSupportFilter('all'); setSupportPage(1); }} className={`px-3 py-1 text-[10px] font-bold uppercase rounded-lg border cursor-pointer ${supportFilter === 'all' ? 'bg-purple-650 border-purple-600 text-white' : 'bg-zinc-900 border-zinc-850 text-zinc-500'}`}>All</button>
+                  <button onClick={() => { setSupportFilter('unread'); setSupportPage(1); }} className={`px-3 py-1 text-[10px] font-bold uppercase rounded-lg border cursor-pointer ${supportFilter === 'unread' ? 'bg-purple-650 border-purple-600 text-white' : 'bg-zinc-900 border-zinc-850 text-zinc-500'}`}>Unread</button>
                 </div>
+              </div>
 
-                {/* Profile Tab Contents */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                  
-                  {/* Chats */}
-                  {profileTab === 'chats' && (
-                    <div className="space-y-2">
-                      {profileData.chats.length === 0 ? (
-                        <p className="text-xs text-zinc-600 italic">No chat messages sent by this user.</p>
-                      ) : (
-                        profileData.chats.map(msg => (
-                          <div key={msg._id} className="p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl flex justify-between items-start gap-4">
-                            <div className="space-y-1">
-                              <span className="text-[9px] text-zinc-550 block font-mono">{new Date(msg.createdAt).toLocaleString()}</span>
-                              <p className="text-xs text-zinc-300 break-all">{msg.text}</p>
-                            </div>
-                            <button
-                              onClick={() => handleContentDelete(msg._id, 'message')}
-                              className="p-1 text-zinc-600 hover:text-red-500 hover:bg-zinc-900 border border-transparent hover:border-zinc-800 rounded transition cursor-pointer"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))
+              {/* Conversations Feed */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {supportLoading ? (
+                  <p className="text-zinc-650 text-xs font-semibold p-4 text-center">Loading threads...</p>
+                ) : conversations.length === 0 ? (
+                  <p className="text-zinc-650 text-xs font-semibold p-4 text-center select-none uppercase tracking-wide">No conversations found.</p>
+                ) : (
+                  conversations.map((c) => (
+                    <button
+                      key={c.user.browserToken}
+                      onClick={() => {
+                        setSelectedConversationToken(c.user.browserToken);
+                        fetchConversationMessages(c.user.browserToken);
+                      }}
+                      className={`w-full p-3 rounded-xl flex items-center justify-between text-left cursor-pointer transition ${
+                        selectedConversationToken === c.user.browserToken 
+                          ? 'bg-[#1b1230] border border-purple-900/30' 
+                          : 'hover:bg-zinc-900/40 border border-transparent'
+                      }`}
+                    >
+                      <div className="truncate space-y-0.5">
+                        <span className="text-xs font-bold text-zinc-200 block truncate">{c.user.displayName}</span>
+                        <span className="text-[10px] text-zinc-550 block truncate font-mono">
+                          {c.lastMessage ? c.lastMessage.text || '[Attachment Image]' : 'appeal started'}
+                        </span>
+                      </div>
+                      {c.unreadCount > 0 && (
+                        <span className="h-5 w-5 bg-purple-600 border border-purple-700 text-white rounded-full flex items-center justify-center font-bold text-[10px]">
+                          {c.unreadCount}
+                        </span>
                       )}
-                    </div>
-                  )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
 
-                  {/* Confessions */}
-                  {profileTab === 'confessions' && (
-                    <div className="space-y-2">
-                      {profileData.confessions.length === 0 ? (
-                        <p className="text-xs text-zinc-650 italic">No confessions posted by this user.</p>
-                      ) : (
-                        profileData.confessions.map(c => (
-                          <div key={c._id} className="p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl flex justify-between items-start gap-4">
-                            <div className="space-y-1">
-                              <span className="text-[9px] text-zinc-500 block font-mono">{new Date(c.createdAt).toLocaleString()}</span>
-                              <p className="text-xs text-zinc-300 break-all">{c.text}</p>
-                            </div>
-                            <button
-                              onClick={() => handleContentDelete(c._id, 'confession')}
-                              className="p-1 text-zinc-600 hover:text-red-500 hover:bg-zinc-900 border border-transparent hover:border-zinc-800 rounded transition cursor-pointer"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+            {/* Conversational Screen */}
+            <div className="md:col-span-2 bg-[#0e0f14] border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden relative">
+              {selectedConversationToken ? (
+                <>
+                  {/* Header details */}
+                  <div className="p-4 border-b border-zinc-800/80 bg-zinc-950/50 flex items-center justify-between select-none">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-black text-zinc-200 block">Conversation with Appeal User</span>
+                      <span className="text-[10px] text-purple-400 font-mono tracking-widest uppercase block">Token: {selectedConversationToken.substring(0, 15)}...</span>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={async () => {
+                          const userObj = conversations.find(c => c.user.browserToken === selectedConversationToken)?.user;
+                          if (!userObj) return;
+                          const action = userObj.isBanned ? 'unban' : 'ban';
+                          if (window.confirm(`${action === 'ban' ? 'Ban' : 'Unban'} this user appeal?`)) {
+                            await adminFetch('/api/admin/user/bulk-action', {
+                              method: 'POST',
+                              body: JSON.stringify({ userIds: [userObj.id], action })
+                            });
+                            showToast(`User ${action === 'ban' ? 'banned' : 'unbanned'} successfully.`, 'success');
+                            fetchConversations();
+                            fetchConversationMessages(selectedConversationToken);
+                          }
+                        }}
+                        className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg border border-zinc-850 cursor-pointer text-[10px] uppercase font-bold"
+                      >
+                        Toggle Ban Status
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Thread messages */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-950/15">
+                    {conversationHistory.map((m) => {
+                      const isAdmin = m.senderType === 'admin';
+                      return (
+                        <div key={m._id} className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'} space-y-1`}>
+                          <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider font-mono">
+                            {m.senderName}
+                          </span>
+                          <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs shadow-md border ${
+                            isAdmin 
+                              ? 'bg-purple-600 border-purple-700 text-white rounded-tr-sm'
+                              : 'bg-[#1b1230] border-purple-900/40 text-zinc-200 rounded-tl-sm'
+                          }`}>
+                            {m.imageUrl && (
+                              <a href={m.imageUrl} target="_blank" rel="noreferrer" className="block mb-1.5 rounded-lg overflow-hidden border border-zinc-950 bg-zinc-950">
+                                <img src={m.imageUrl} alt="Support attachment" className="w-full max-h-48 object-cover hover:scale-105 transition" />
+                              </a>
+                            )}
+                            {m.text && <p className="break-words leading-relaxed whitespace-pre-wrap">{m.text}</p>}
                           </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {/* Memes */}
-                  {profileTab === 'memes' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {profileData.memes.length === 0 ? (
-                        <p className="text-xs text-zinc-600 italic col-span-2">No memes uploaded by this user.</p>
-                      ) : (
-                        profileData.memes.map(m => (
-                          <div key={m._id} className="p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl flex flex-col justify-between gap-3 overflow-hidden">
-                            <div className="space-y-1.5">
-                              <span className="text-[9px] text-zinc-550 block font-mono">{new Date(m.createdAt).toLocaleString()}</span>
-                              <img src={m.imageUrl} alt={m.caption} className="w-full h-32 object-cover rounded-lg border border-zinc-900 bg-zinc-950" />
-                              <p className="text-xs text-zinc-300 break-words">{m.caption}</p>
-                            </div>
-                            <button
-                              onClick={() => handleContentDelete(m._id, 'meme')}
-                              className="w-full py-1 bg-red-950/40 border border-red-900/50 hover:bg-red-950 text-red-500 text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Delete Meme
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {/* Polls */}
-                  {profileTab === 'polls' && (
-                    <div className="space-y-2">
-                      {profileData.polls.length === 0 ? (
-                        <p className="text-xs text-zinc-600 italic">No poll votes registered by this user.</p>
-                      ) : (
-                        profileData.polls.map(p => (
-                          <div key={p._id} className="p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl">
-                            <span className="text-[9px] text-zinc-500 block font-mono">{new Date(p.createdAt).toLocaleString()}</span>
-                            <h4 className="text-xs font-bold text-zinc-200 mt-1">{p.question}</h4>
-                            <div className="mt-2 space-y-1">
-                              {p.options.map((opt, idx) => {
-                                const didVote = opt.votes.includes(profileData.profile.browserToken);
-                                return (
-                                  <div key={idx} className={`text-[10px] p-1.5 rounded-lg border flex justify-between ${didVote ? 'bg-purple-955/30 border-purple-800/40 text-purple-400 font-bold' : 'bg-zinc-950 border-zinc-900 text-zinc-500'}`}>
-                                    <span>{opt.text}</span>
-                                    <span>{opt.votes.length} votes {didVote && '✨ Your Vote'}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {/* Reports */}
-                  {profileTab === 'reports' && (
-                    <div className="space-y-2">
-                      {profileData.reports.length === 0 ? (
-                        <p className="text-xs text-zinc-600 italic">No reports submitted by this user.</p>
-                      ) : (
-                        profileData.reports.map(r => (
-                          <div key={r._id} className="p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl space-y-2">
-                            <div className="flex justify-between">
-                              <span className="px-1.5 py-0.5 bg-red-950/40 border border-red-900/50 text-red-500 text-[8px] font-black uppercase rounded">
-                                Reported {r.targetType}
+                          <div className="flex items-center gap-1.5 px-1 select-none">
+                            <span className="text-[9px] text-zinc-650 font-mono">
+                              {new Date(m.createdAt).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {isAdmin && (
+                              <span className="text-[9px] text-zinc-650 font-bold uppercase tracking-wider">
+                                {m.isSeen ? '• Read' : '• Sent'}
                               </span>
-                              <span className="text-[9px] text-zinc-550 font-mono">{new Date(r.createdAt).toLocaleString()}</span>
-                            </div>
-                            <p className="text-xs text-zinc-400 break-words"><span className="font-bold text-zinc-550">Reason:</span> {r.reason}</p>
+                            )}
                           </div>
-                        ))
-                      )}
+                        </div>
+                      );
+                    })}
+                    {supportUserTyping && (
+                      <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest italic animate-pulse">User is typing appeal...</p>
+                    )}
+                    <div ref={supportBottomRef} />
+                  </div>
+
+                  {/* Attachment review bar */}
+                  {supportPreviewUrl && (
+                    <div className="p-2 border-t border-zinc-800/80 bg-zinc-950 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <img src={supportPreviewUrl} alt="Attachment" className="h-10 w-10 object-cover rounded border border-zinc-800" />
+                        <span className="text-[10px] text-zinc-600 font-mono">({Math.round(supportAttachment.size / 1024)} KB)</span>
+                      </div>
+                      <button onClick={handleRemoveSupportAttachment} className="text-xs text-red-500 hover:text-red-400 font-bold px-2 py-1 bg-red-950/40 rounded border border-red-900/50 cursor-pointer">Remove</button>
                     </div>
                   )}
 
-                  {/* Logs Timeline */}
-                  {profileTab === 'logs' && (
-                    <div className="space-y-2 font-mono text-[10px]">
-                      {profileData.logs.length === 0 ? (
-                        <p className="text-xs text-zinc-600 italic font-sans">No admin log activities registered against this moniker.</p>
+                  {/* Input bar */}
+                  <form onSubmit={handleSendSupportReply} className="p-3 border-t border-zinc-800/80 bg-zinc-950/80 flex gap-2 items-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={fileInputRef}
+                      onChange={handleSupportFileSelect}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2.5 bg-zinc-900 hover:bg-zinc-850 text-zinc-500 hover:text-zinc-300 rounded-xl cursor-pointer border border-zinc-800"
+                    >
+                      <Image className="h-4.5 w-4.5" />
+                    </button>
+                    
+                    <input
+                      type="text"
+                      placeholder="Type reply to appeal visitor..."
+                      value={supportReplyText}
+                      onChange={(e) => {
+                        setSupportReplyText(e.target.value);
+                        if (socket) {
+                          socket.emit('support-typing', { token: selectedConversationToken, isTyping: e.target.value.trim() !== '' });
+                        }
+                      }}
+                      className="flex-1 bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650"
+                    />
+                    
+                    <button
+                      type="submit"
+                      disabled={supportSending || (!supportReplyText.trim() && !supportAttachment)}
+                      className="p-2.5 bg-purple-600 hover:bg-purple-550 disabled:opacity-40 text-white rounded-xl cursor-pointer"
+                    >
+                      {supportSending ? (
+                        <div className="h-4.5 w-4.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       ) : (
-                        profileData.logs.map(log => (
-                          <div key={log._id} className="p-2.5 bg-zinc-955/60 border border-zinc-900 rounded-xl space-y-1">
-                            <div className="flex justify-between items-center text-zinc-600">
-                              <span>Admin: <span className="text-violet-400 font-bold">{log.adminUsername}</span></span>
-                              <span>{new Date(log.createdAt).toLocaleString()}</span>
-                            </div>
-                            <p className="text-zinc-350 break-words"><span className="px-1 py-0.2 bg-zinc-900 border border-zinc-800 text-[9px] font-bold text-zinc-500 rounded mr-1.5">{log.action}</span>{log.details}</p>
-                          </div>
-                        ))
+                        <Send className="h-4.5 w-4.5" />
                       )}
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <div className="h-full flex items-center justify-center text-center p-8 select-none text-zinc-600 uppercase tracking-widest font-black">
+                  Select a Conversation from list to reply
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 5: Settings Customizer */}
+        {activeTab === 'settings' && (
+          <div className="space-y-6 max-w-2xl">
+            <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Global Configurations</h2>
+
+            {settingsLoading ? (
+              <p className="text-zinc-500 font-medium">Writing updates to configurations database...</p>
+            ) : (
+              <form onSubmit={handleSettingsSave} className="bg-[#0e0f14] border border-zinc-800/80 p-6 rounded-2xl space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Website Name</label>
+                    <input
+                      type="text"
+                      value={settings.website_name}
+                      onChange={(e) => setSettings({ ...settings, website_name: e.target.value })}
+                      className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Tagline</label>
+                    <input
+                      type="text"
+                      value={settings.website_tagline}
+                      onChange={(e) => setSettings({ ...settings, website_tagline: e.target.value })}
+                      className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Primary Color Hex Accent</label>
+                    <input
+                      type="color"
+                      value={settings.primary_theme_color}
+                      onChange={(e) => setSettings({ ...settings, primary_theme_color: e.target.value })}
+                      className="w-full bg-[#121318] border border-zinc-850 rounded-xl h-10 px-2 py-1 focus:outline-none cursor-pointer"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Chat Slow Mode (seconds)</label>
+                    <input
+                      type="number"
+                      value={settings.slow_mode_seconds}
+                      onChange={(e) => setSettings({ ...settings, slow_mode_seconds: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Maintenance mode description</label>
+                  <textarea
+                    rows="3"
+                    value={settings.maintenance_message}
+                    onChange={(e) => setSettings({ ...settings, maintenance_message: e.target.value })}
+                    className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650 resize-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Support screen welcome details</label>
+                  <textarea
+                    rows="2"
+                    value={settings.support_welcome_message}
+                    onChange={(e) => setSettings({ ...settings, support_welcome_message: e.target.value })}
+                    className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650 resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 border border-zinc-850 rounded-xl bg-zinc-950/20">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-zinc-300 block">Surveillance Stealth Mode</span>
+                    <span className="text-[10px] text-zinc-550 block leading-tight">Completely hides Professor online flags and counters from public visitors.</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.stealth_mode}
+                    onChange={(e) => setSettings({ ...settings, stealth_mode: e.target.checked })}
+                    className="h-5 w-5 accent-purple-650 cursor-pointer"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-purple-600 hover:bg-purple-550 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition cursor-pointer"
+                >
+                  Apply System Configurations
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* Tab 6: Trash Bin */}
+        {activeTab === 'trash' && (
+          <div className="space-y-6">
+            <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Soft-Deleted Trash Bin</h2>
+
+            {trashLoading ? (
+              <p className="text-zinc-500 font-medium">Emptying search queries...</p>
+            ) : (
+              <div className="space-y-8">
+                {/* Chat Messages trash */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-purple-400">Trash Chat Messages</h3>
+                  {trashItems.messages.length === 0 ? (
+                    <p className="text-zinc-650 text-xs font-semibold p-4 bg-[#0e0f14] border border-zinc-850 rounded-2xl select-none">No messages in trash.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {trashItems.messages.map((m) => (
+                        <div key={m._id} className="p-4 bg-[#0e0f14] border border-zinc-850 rounded-xl flex items-center justify-between gap-4">
+                          <div className="truncate">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{m.sender?.displayName || 'Anonymous'} • {new Date(m.deletedAt || m.updatedAt).toLocaleDateString()}</span>
+                            <p className="text-zinc-200 text-xs mt-1 truncate max-w-xl font-medium">"{m.text}"</p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => handleRestoreTrash(m._id, 'message')} className="p-2 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-900/50 rounded-xl cursor-pointer" title="Restore"><Undo className="h-4.5 w-4.5" /></button>
+                            <button onClick={() => handlePermanentDeleteTrash(m._id, 'message')} className="p-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded-xl cursor-pointer" title="Permanent Delete"><Trash2 className="h-4.5 w-4.5" /></button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
+                </div>
 
+                {/* Confessions Trash */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-purple-400">Trash Confessions</h3>
+                  {trashItems.confessions.length === 0 ? (
+                    <p className="text-zinc-650 text-xs font-semibold p-4 bg-[#0e0f14] border border-zinc-850 rounded-2xl select-none">No confessions in trash.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {trashItems.confessions.map((m) => (
+                        <div key={m._id} className="p-4 bg-[#0e0f14] border border-zinc-850 rounded-xl flex items-center justify-between gap-4">
+                          <div className="truncate">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{m.sender?.displayName || 'Anonymous'} • {new Date(m.deletedAt || m.updatedAt).toLocaleDateString()}</span>
+                            <p className="text-zinc-200 text-xs mt-1 truncate max-w-xl font-medium">"{m.text}"</p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => handleRestoreTrash(m._id, 'confession')} className="p-2 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-900/50 rounded-xl cursor-pointer" title="Restore"><Undo className="h-4.5 w-4.5" /></button>
+                            <button onClick={() => handlePermanentDeleteTrash(m._id, 'confession')} className="p-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded-xl cursor-pointer" title="Permanent Delete"><Trash2 className="h-4.5 w-4.5" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Memes Trash */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-purple-400">Trash Memes</h3>
+                  {trashItems.memes.length === 0 ? (
+                    <p className="text-zinc-650 text-xs font-semibold p-4 bg-[#0e0f14] border border-zinc-850 rounded-2xl select-none">No memes in trash.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {trashItems.memes.map((m) => (
+                        <div key={m._id} className="p-4 bg-[#0e0f14] border border-zinc-850 rounded-xl flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3 truncate">
+                            <img src={m.imageUrl} alt="Trash meme" className="h-10 w-10 object-cover rounded bg-zinc-950 border border-zinc-850" />
+                            <div className="truncate">
+                              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{m.sender?.displayName || 'Anonymous'} • {new Date(m.deletedAt || m.updatedAt).toLocaleDateString()}</span>
+                              <p className="text-zinc-200 text-xs mt-0.5 truncate max-w-xl font-medium">"{m.caption || 'No caption'}"</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => handleRestoreTrash(m._id, 'meme')} className="p-2 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-900/50 rounded-xl cursor-pointer" title="Restore"><Undo className="h-4.5 w-4.5" /></button>
+                            <button onClick={() => handlePermanentDeleteTrash(m._id, 'meme')} className="p-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded-xl cursor-pointer" title="Permanent Delete"><Trash2 className="h-4.5 w-4.5" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Polls Trash */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-purple-400">Trash Polls</h3>
+                  {trashItems.polls.length === 0 ? (
+                    <p className="text-zinc-650 text-xs font-semibold p-4 bg-[#0e0f14] border border-zinc-850 rounded-2xl select-none">No polls in trash.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {trashItems.polls.map((m) => (
+                        <div key={m._id} className="p-4 bg-[#0e0f14] border border-zinc-850 rounded-xl flex items-center justify-between gap-4">
+                          <div className="truncate">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{m.sender?.displayName || 'Anonymous'} • {new Date(m.deletedAt || m.updatedAt).toLocaleDateString()}</span>
+                            <p className="text-zinc-200 text-xs mt-1 truncate max-w-xl font-medium">"{m.question}"</p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => handleRestoreTrash(m._id, 'poll')} className="p-2 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-900/50 rounded-xl cursor-pointer" title="Restore"><Undo className="h-4.5 w-4.5" /></button>
+                            <button onClick={() => handlePermanentDeleteTrash(m._id, 'poll')} className="p-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded-xl cursor-pointer" title="Permanent Delete"><Trash2 className="h-4.5 w-4.5" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab 7: Announcements Scheduled & Notices History */}
+        {activeTab === 'announcements' && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* CRUD Form */}
+              <div className="space-y-4">
+                <h3 className="text-md font-bold uppercase text-white tracking-tight select-none">
+                  {editingAnnouncementId ? 'Edit Announcement' : 'Schedule Announcement'}
+                </h3>
+                <form onSubmit={handleAnnouncementSubmit} className="p-5 bg-[#0e0f14] border border-zinc-800/80 rounded-2xl space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Notice Title</label>
+                    <input
+                      type="text"
+                      value={newAnnouncement.title}
+                      onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
+                      placeholder="e.g. Server Maintenance Notice"
+                      className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Content Description</label>
+                    <textarea
+                      rows="4"
+                      value={newAnnouncement.content}
+                      onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
+                      placeholder="Write announcement details..."
+                      className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650 resize-none"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Scheduled Start</label>
+                      <input
+                        type="datetime-local"
+                        value={newAnnouncement.scheduledStart}
+                        onChange={(e) => setNewAnnouncement({ ...newAnnouncement, scheduledStart: e.target.value })}
+                        className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Expires At (Optional)</label>
+                      <input
+                        type="datetime-local"
+                        value={newAnnouncement.expiresAt}
+                        onChange={(e) => setNewAnnouncement({ ...newAnnouncement, expiresAt: e.target.value })}
+                        className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Alert Color Theme</label>
+                      <input
+                        type="color"
+                        value={newAnnouncement.bgColor}
+                        onChange={(e) => setNewAnnouncement({ ...newAnnouncement, bgColor: e.target.value })}
+                        className="w-full bg-[#121318] border border-zinc-850 rounded-xl h-10 px-2 py-1 cursor-pointer"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Text Color Accent</label>
+                      <input
+                        type="color"
+                        value={newAnnouncement.textColor}
+                        onChange={(e) => setNewAnnouncement({ ...newAnnouncement, textColor: e.target.value })}
+                        className="w-full bg-[#121318] border border-zinc-850 rounded-xl h-10 px-2 py-1 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Display Layout Area</label>
+                    <select
+                      value={newAnnouncement.type}
+                      onChange={(e) => setNewAnnouncement({ ...newAnnouncement, type: e.target.value })}
+                      className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                    >
+                      <option value="sticky">Top Sticky Bar</option>
+                      <option value="popup">Middle Popup Overlay</option>
+                      <option value="homepage">Lounge Card Panel</option>
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {editingAnnouncementId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAnnouncementId(null);
+                          setNewAnnouncement({
+                            title: '',
+                            content: '',
+                            type: 'homepage',
+                            scheduledStart: '',
+                            expiresAt: '',
+                            bgColor: '#f3e8ff',
+                            textColor: '#6b21a8'
+                          });
+                        }}
+                        className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 text-xs font-bold uppercase tracking-widest rounded-xl transition cursor-pointer"
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      className="flex-1 py-3 bg-purple-650 hover:bg-purple-600 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition cursor-pointer"
+                    >
+                      {editingAnnouncementId ? 'Save Changes' : 'Schedule Broadcast'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* History Search Logs */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-md font-bold uppercase text-white tracking-tight select-none">Notice History Log</h3>
+                  <div className="flex gap-2 select-none">
+                    <select
+                      value={announcementFilter}
+                      onChange={(e) => { setAnnouncementFilter(e.target.value); setAnnouncementPage(1); }}
+                      className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-1.5 text-[10px] uppercase font-bold text-zinc-400 focus:outline-none cursor-pointer"
+                    >
+                      <option value="all">All</option>
+                      <option value="active">Active</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="expired">Expired</option>
+                      <option value="deleted">Deleted</option>
+                    </select>
+                  </div>
+                </div>
+
+                {announcementsLoading ? (
+                  <p className="text-zinc-650 text-xs font-medium">Scanning notices history database...</p>
+                ) : announcementHistory.length === 0 ? (
+                  <p className="text-zinc-650 text-xs font-semibold p-4 bg-[#0e0f14] border border-zinc-850 rounded-2xl select-none">No notices found.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {announcementHistory.map((ann) => (
+                      <div key={ann._id} className="p-4 bg-[#0e0f14] border border-zinc-850 rounded-xl flex items-center justify-between gap-4">
+                        <div className="truncate space-y-0.5">
+                          <span className="text-[10px] font-bold text-purple-400 block uppercase tracking-wide">
+                            {ann.title} ({ann.status === 'trash' ? 'deleted' : 'active'})
+                          </span>
+                          <span className="text-[9px] text-zinc-550 block font-mono">Starts: {new Date(ann.scheduledStart).toLocaleString()}</span>
+                          <p className="text-zinc-300 text-xs truncate max-w-sm font-medium">"{ann.content}"</p>
+                        </div>
+
+                        {ann.status !== 'trash' && (
+                          <div className="flex gap-1.5">
+                            <button onClick={() => handleEditAnnouncementSelect(ann)} className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-850 rounded-lg cursor-pointer" title="Edit"><Edit className="h-4 w-4" /></button>
+                            <button onClick={() => handleSoftDeleteAnnouncement(ann._id)} className="p-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded-lg cursor-pointer" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 8: Login History */}
+        {activeTab === 'history' && (
+          <div className="space-y-6">
+            <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Admin Authentication History Logs</h2>
+
+            {sessionsLoading ? (
+              <p className="text-zinc-500 font-medium">Scanning session history...</p>
+            ) : sessionLogs.length === 0 ? (
+              <p className="text-zinc-650 text-xs font-semibold p-4 bg-[#0e0f14] border border-zinc-850 rounded-2xl select-none">No logged sessions.</p>
+            ) : (
+              <div className="bg-[#0e0f14] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-2xl">
+                <table className="w-full border-collapse text-left text-xs select-none">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-500 bg-zinc-950/50 font-bold uppercase tracking-wider">
+                      <th className="p-4">Login Time</th>
+                      <th className="p-4">Logout Time</th>
+                      <th className="p-4">Duration</th>
+                      <th className="p-4">Oversight IP Address</th>
+                      <th className="p-4">User Agent Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessionLogs.map((s) => (
+                      <tr key={s._id} className="border-b border-zinc-850 hover:bg-zinc-900/30 transition">
+                        <td className="p-4 font-mono text-zinc-300">{new Date(s.loginTime).toLocaleString()}</td>
+                        <td className="p-4 font-mono text-zinc-300">
+                          {s.logoutTime ? new Date(s.logoutTime).toLocaleString() : (
+                            <span className="text-emerald-500 font-bold uppercase tracking-wider text-[9px] animate-pulse">Active Session</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-zinc-400 font-semibold">
+                          {s.durationSeconds ? `${Math.floor(s.durationSeconds / 60)}m ${s.durationSeconds % 60}s` : '-'}
+                        </td>
+                        <td className="p-4 font-mono text-[10px] text-purple-400">{s.ip}</td>
+                        <td className="p-4 font-mono text-[10px] text-zinc-550 max-w-[200px] truncate" title={s.browser}>
+                          {s.browser}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 9: Audit Logs Trail */}
+        {activeTab === 'logs' && (
+          <div className="space-y-6">
+            <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Oversight Audit Trail</h2>
+
+            {logsLoading ? (
+              <p className="text-zinc-500 font-medium">Scanning logs trail...</p>
+            ) : (
+              <div className="bg-[#0e0f14] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="p-4 border-b border-zinc-800/80 bg-zinc-950/50 flex justify-between select-none">
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Administrative Logs Trail</span>
+                  <button 
+                    onClick={async () => {
+                      if (window.confirm('WARNING: Trigger raw database backup?')) {
+                        await adminFetch('/api/admin/backup', { method: 'POST' });
+                        showToast('Database backup triggered successfully.', 'success');
+                      }
+                    }}
+                    className="px-2.5 py-1.5 bg-purple-650 hover:bg-purple-600 text-white rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-wider border border-purple-500/30"
+                  >
+                    Trigger DB Backup
+                  </button>
+                </div>
+                <div className="p-4 max-h-[60vh] overflow-y-auto space-y-2">
+                  {auditLogs.length === 0 ? (
+                    <p className="text-zinc-650 text-xs font-semibold p-4 text-center select-none uppercase tracking-wide">Audit Trail is empty.</p>
+                  ) : (
+                    auditLogs.map((log, idx) => (
+                      <div key={idx} className="p-3 bg-[#07080b] border border-zinc-850 rounded-xl flex items-center justify-between text-xs gap-4 hover:border-zinc-800 transition">
+                        <div>
+                          <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest block">{log.action || 'ACTIVITY'}</span>
+                          <p className="text-zinc-200 font-medium mt-1 leading-relaxed">"{log.text || log.details}"</p>
+                        </div>
+                        <span className="text-[10px] font-mono text-zinc-600 font-bold shrink-0">{new Date(log.createdAt || log.timestamp).toLocaleString()}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* User Profile Oversight Drawer overlay */}
+      {drawerUserId && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex justify-end animate-fade-in select-none">
+          <div className="w-full max-w-lg bg-[#0e0f14] border-l border-zinc-800 h-screen flex flex-col p-6 space-y-6 shadow-2xl relative animate-slide-left overflow-y-auto">
+            <button 
+              onClick={() => { setDrawerUserId(null); setDrawerData(null); }}
+              className="absolute top-4 right-4 text-zinc-550 hover:text-white text-sm font-bold cursor-pointer font-mono"
+            >
+              ✕ Close
+            </button>
+
+            {drawerLoading ? (
+              <p className="text-zinc-500 font-medium pt-8">Decrypting identity database logs...</p>
+            ) : drawerData ? (
+              <>
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase leading-none">{drawerData.profile.displayName}</h3>
+                  <span className="text-[9px] font-mono text-purple-400 block mt-1 uppercase tracking-widest">Oversight ID: {drawerData.profile._id}</span>
+                </div>
+
+                {/* Account Actions */}
+                <div className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl space-y-3">
+                  <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider block">Oversight Status Actions</span>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={async () => {
+                        const action = drawerData.profile.isBanned ? 'unban' : 'ban';
+                        await adminFetch('/api/admin/user/bulk-action', {
+                          method: 'POST',
+                          body: JSON.stringify({ userIds: [drawerUserId], action })
+                        });
+                        showToast(`User ${action === 'ban' ? 'banned' : 'unbanned'}.`, 'success');
+                        handleOpenUserDrawer(drawerUserId);
+                        fetchUsers();
+                      }}
+                      className="flex-1 py-2.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded-xl cursor-pointer text-xs font-bold uppercase tracking-wider"
+                    >
+                      {drawerData.profile.isBanned ? 'Unban User' : 'Ban User'}
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        const action = drawerData.profile.isShadowBanned ? 'unshadow-ban' : 'shadow-ban';
+                        await adminFetch('/api/admin/user/bulk-action', {
+                          method: 'POST',
+                          body: JSON.stringify({ userIds: [drawerUserId], action })
+                        });
+                        showToast(`User shadow-ban ${action === 'shadow-ban' ? 'enabled' : 'disabled'}.`, 'success');
+                        handleOpenUserDrawer(drawerUserId);
+                        fetchUsers();
+                      }}
+                      className="flex-1 py-2.5 bg-amber-950/40 hover:bg-amber-900/40 text-amber-400 border border-amber-900/50 rounded-xl cursor-pointer text-xs font-bold uppercase tracking-wider"
+                    >
+                      {drawerData.profile.isShadowBanned ? 'Unshadow' : 'Shadow Ban'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Add Warning */}
+                <div className="space-y-2">
+                  <label className="text-[10px] text-zinc-550 font-bold uppercase tracking-wider">Issue Formal Warning</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. Spamming links in lobby"
+                      value={newWarningText}
+                      onChange={(e) => setNewWarningText(e.target.value)}
+                      className="flex-1 bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650"
+                    />
+                    <button onClick={handleAddWarning} className="px-4 py-2.5 bg-purple-650 hover:bg-purple-600 text-white text-xs font-bold uppercase rounded-xl cursor-pointer">Issue</button>
+                  </div>
+                </div>
+
+                {/* Warning History Logs */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-zinc-550 font-bold uppercase tracking-wider block">Warning History Logs</span>
+                  {drawerData.profile.warnings?.length === 0 ? (
+                    <p className="text-zinc-650 text-xs font-semibold italic">No warnings issued to this user nickname.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {drawerData.profile.warnings.map((w) => (
+                        <div key={w._id} className="p-3 bg-zinc-950/50 border border-zinc-850 rounded-xl flex items-center justify-between text-xs">
+                          <div>
+                            <p className="text-zinc-300 font-medium">"{w.reason}"</p>
+                            <span className="text-[9px] text-zinc-600 font-mono mt-0.5 block">{new Date(w.date).toLocaleString()}</span>
+                          </div>
+                          <button onClick={() => handleRemoveWarning(w._id)} className="text-[10px] text-red-500 hover:text-red-400 font-bold px-2 py-0.5 rounded cursor-pointer border border-transparent hover:border-red-900/50 hover:bg-red-950/20">Clear</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Private Admin Notes */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-zinc-550 font-bold uppercase tracking-wider block">Oversight Private Notes (Admin Only)</span>
+                  <textarea
+                    rows="3"
+                    value={adminNoteText}
+                    onChange={(e) => setAdminNoteText(e.target.value)}
+                    placeholder="Write private notes on this identity profile..."
+                    className="w-full bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650 resize-none"
+                  />
+                  <button onClick={handleSaveNotes} className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white rounded-xl border border-zinc-800 text-xs font-bold uppercase cursor-pointer">Save Notes</button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}

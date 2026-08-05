@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../context/UserContext';
 import { SocketContext } from '../context/SocketContext';
 import Logo from '../components/Logo';
+import professorAvatar from '../assets/professor-avatar.png';
 
 // Code splitting & lazy loading components for performance optimization
 const ChatBox = React.lazy(() => import('../components/ChatBox'));
@@ -270,9 +271,17 @@ export default function DashboardPage() {
         {/* User Identity widget */}
         <div className="p-5 bg-white border-t border-slate-200/65 flex items-center justify-between shadow-[0_-2px_10px_rgba(148,163,184,0.02)]">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-full text-purple-600 shrink-0">
-              <UserIcon className="h-4 w-4" />
-            </div>
+            {user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' ? (
+              <img 
+                src={professorAvatar} 
+                alt="Admin Avatar" 
+                className="h-12 w-12 rounded-full border border-slate-200 bg-slate-50 object-cover shrink-0" 
+              />
+            ) : (
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-full text-purple-600 shrink-0">
+                <UserIcon className="h-4 w-4" />
+              </div>
+            )}
             <div className="flex flex-col leading-none overflow-hidden">
               <span className="text-[14px] font-black text-slate-800 truncate">{user?.displayName}</span>
               <span className="text-[9px] text-slate-400 font-bold tracking-wider mt-1.5 uppercase">Student ID</span>
@@ -349,7 +358,15 @@ export default function DashboardPage() {
 
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <UserIcon className="h-4 w-4 text-purple-600" />
+              {user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' ? (
+                <img 
+                  src={professorAvatar} 
+                  alt="Admin Avatar" 
+                  className="h-12 w-12 rounded-full border border-slate-200 bg-slate-50 object-cover shrink-0" 
+                />
+              ) : (
+                <UserIcon className="h-4 w-4 text-purple-600" />
+              )}
               <div className="flex flex-col text-xs leading-none">
                 <span className="font-extrabold text-slate-800">{user?.displayName}</span>
                 <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Campus Student</span>

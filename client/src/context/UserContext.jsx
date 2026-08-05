@@ -61,6 +61,7 @@ export function UserProvider({ children }) {
       const localToken = localStorage.getItem('dseu_unfiltered_token');
       
       setUser(data.user);
+      setIsBanned(data.user.isBanned || false);
       
       // Store token locally as a fallback
       localStorage.setItem('dseu_unfiltered_token', data.user.browserToken);
@@ -77,6 +78,38 @@ export function UserProvider({ children }) {
     } catch (error) {
       console.error('Error fetching anonymous identity:', error);
       setLoading(false);
+    }
+  };
+
+  const adminFetch = async (url, options = {}) => {
+    const token = adminCsrfToken || localStorage.getItem('dseu_admin_csrf_token') || '';
+    const headers = {
+      ...options.headers,
+      'x-csrf-token': token
+    };
+
+    if (options.body && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include'
+      });
+
+      if (response.status === 401) {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.error === 'ADMIN_SESSION_EXPIRED' || errorData.error === 'ADMIN_UNAUTHORIZED') {
+          setAdminCsrfToken('');
+          window.location.href = '/?admin_session_expired=true';
+        }
+      }
+      return response;
+    } catch (err) {
+      console.error('Admin API error:', err);
+      throw err;
     }
   };
 
@@ -97,7 +130,8 @@ export function UserProvider({ children }) {
       maintenanceMessage,
       refreshProfile: fetchProfile,
       adminCsrfToken,
-      setAdminCsrfToken
+      setAdminCsrfToken,
+      adminFetch
     }}>
       {children}
     </UserContext.Provider>

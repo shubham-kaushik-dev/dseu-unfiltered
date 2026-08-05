@@ -3,6 +3,8 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
 import { 
   requireAdmin, 
   checkLoginLockout, 
@@ -15,18 +17,28 @@ import Confession from '../models/Confession.js';
 import Meme from '../models/Meme.js';
 import Poll from '../models/Poll.js';
 import Report from '../models/Report.js';
-import { runDatabaseBackup } from '../utils/backup.js';
 import AdminLog from '../models/AdminLog.js';
 import Settings from '../models/Settings.js';
-import { v2 as cloudinary } from 'cloudinary';
+import PinnedMessage from '../models/PinnedMessage.js';
+import SupportMessage from '../models/SupportMessage.js';
+import AdminNotification from '../models/AdminNotification.js';
+import AdminSession from '../models/AdminSession.js';
+import Announcement from '../models/Announcement.js';
+import { runDatabaseBackup } from '../utils/backup.js';
 import { generateUniqueIdentity } from '../utils/identity.js';
 
-// Configure Cloudinary if keys are present
-if (
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
-) {
+const router = express.Router();
+const getIo = (req) => req.app.get('io');
+
+const isCloudinaryConfigured = () => {
+  return !!(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+};
+
+if (isCloudinaryConfigured()) {
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -34,27 +46,26 @@ if (
   });
 }
 
-const router = express.Router();
-const getIo = (req) => req.app.get('io');
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
 
-// We will pre-hash the admin password from .env on startup
 let hashedAdminPassword = '';
-const adminUsername = process.env.ADMIN_USERNAME || 'administrator';
-const adminPasswordRaw = process.env.ADMIN_PASSWORD || 'CHANGE_THIS_TO_A_STRONG_PASSWORD';
+const adminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
+const adminPasswordRaw = process.env.ADMIN_PASSWORD || 'Ananya2608';
 
-// Hash the password
 const initAdminPassword = async () => {
   hashedAdminPassword = await bcrypt.hash(adminPasswordRaw, 10);
 };
 initAdminPassword();
 
 // POST /api/admin/login
-// Bcrypt authentication, HttpOnly cookies, rate limits and lockouts
 router.post('/login', async (req, res) => {
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const { username, password } = req.body;
 
-  // 1. Check if IP is currently locked out
   const lockout = checkLoginLockout(ip);
   if (lockout.isLocked) {
     return res.status(429).json({
@@ -67,7 +78,6 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'INVALID_INPUT', message: 'Username and password are required.' });
   }
 
-  // 2. Compare credentials
   const usernameMatch = username === adminUsername;
   let passwordMatch = false;
 
@@ -86,18 +96,23 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid credentials.' });
   }
 
-  // 3. Clear failed attempts on success
   clearFailedAttempts(ip);
 
-  // 4. Sign JWT with a secure random CSRF token
+  // 1. Log session in MongoDB
+  const session = await AdminSession.create({
+    adminUsername,
+    loginTime: new Date(),
+    browser: req.headers['user-agent'] || '',
+    ip: ip
+  });
+
   const csrfToken = crypto.randomBytes(32).toString('hex');
   const token = jwt.sign(
-    { username: adminUsername, role: 'admin', csrfToken },
+    { username: adminUsername, role: 'admin', csrfToken, sessionId: session._id },
     process.env.JWT_SECRET || 'fallback_secret',
-    { expiresIn: '1h' } // 1 hour session
+    { expiresIn: '1h' }
   );
 
-  // 5. Set HttpOnly cookie
   res.cookie('dseu_unfiltered_admin', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -105,14 +120,12 @@ router.post('/login', async (req, res) => {
     maxAge: 60 * 60 * 1000 // 1 hour
   });
 
-  // Log action
   await AdminLog.create({
     action: 'ADMIN_LOGIN',
     details: `Admin logged in from IP ${ip}`,
     adminUsername
   });
 
-  // Emit event to admin logs panel
   const io = getIo(req);
   if (io) {
     io.to('admin').emit('moderation-activity', {
@@ -120,14 +133,40 @@ router.post('/login', async (req, res) => {
       text: `Administrator logged in from IP ${ip}`,
       timestamp: new Date()
     });
+    // Trigger stealth update
+    io.emit('online-stealth-update');
   }
 
   res.json({ message: 'Logged in successfully as administrator.', csrfToken });
 });
 
 // POST /api/admin/logout
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  const token = req.cookies?.dseu_unfiltered_admin;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+      if (decoded.sessionId) {
+        const session = await AdminSession.findById(decoded.sessionId);
+        if (session) {
+          session.logoutTime = new Date();
+          session.durationSeconds = Math.ceil((session.logoutTime - session.loginTime) / 1000);
+          await session.save();
+        }
+      }
+    } catch (err) {
+      // ignore token verification failures
+    }
+  }
+
   res.clearCookie('dseu_unfiltered_admin');
+
+  // Trigger online stealth update
+  const io = getIo(req);
+  if (io) {
+    io.emit('online-stealth-update');
+  }
+
   res.json({ message: 'Logged out successfully.' });
 });
 
@@ -136,728 +175,145 @@ router.get('/check', requireAdmin, (req, res) => {
   res.json({ username: req.admin.username, csrfToken: req.admin.csrfToken });
 });
 
-// ==========================================
-// PROTECTED ADMIN ENDPOINTS
-// ==========================================
-
-// GET /api/admin/stats
-// Returns comprehensive real-time dashboard analytics
+// GET /api/admin/stats - Live counters and status indicators
 router.get('/stats', requireAdmin, async (req, res) => {
   try {
-    // Total numbers
-    const totalUsers = await User.countDocuments();
-    const totalChatMessages = await LiveChatMessage.countDocuments();
-    const totalConfessions = await Confession.countDocuments();
-    const totalMemes = await Meme.countDocuments();
-    const totalPolls = await Poll.countDocuments();
+    const totalUsers = await User.countDocuments({ role: { $ne: 'admin' } });
+    const totalChatMessages = await LiveChatMessage.countDocuments({ status: { $ne: 'trash' } });
+    const totalConfessions = await Confession.countDocuments({ status: { $ne: 'trash' } });
+    const totalMemes = await Meme.countDocuments({ status: { $ne: 'trash' } });
+    const totalPolls = await Poll.countDocuments({ status: { $ne: 'trash' } });
+    const totalReports = await Report.countDocuments();
     const totalReportsPending = await Report.countDocuments({ status: 'pending' });
-    const totalReportsAll = await Report.countDocuments();
     const bannedUsers = await User.countDocuments({ isBanned: true });
     const mutedUsers = await User.countDocuments({ mutedUntil: { $gt: new Date() } });
 
-    // Today's activity
+    // Today's boundaries
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const newUsersToday = await User.countDocuments({ createdAt: { $gte: startOfToday } });
-    const chatMessagesToday = await LiveChatMessage.countDocuments({ createdAt: { $gte: startOfToday } });
-    const confessionsToday = await Confession.countDocuments({ createdAt: { $gte: startOfToday } });
-    const memesToday = await Meme.countDocuments({ createdAt: { $gte: startOfToday } });
-    
-    // Today's active users (who did something today or logged in)
+    const newUsersToday = await User.countDocuments({ createdAt: { $gte: startOfToday }, role: { $ne: 'admin' } });
+    const chatMessagesToday = await LiveChatMessage.countDocuments({ createdAt: { $gte: startOfToday }, status: { $ne: 'trash' } });
+    const confessionsToday = await Confession.countDocuments({ createdAt: { $gte: startOfToday }, status: { $ne: 'trash' } });
+    const memesToday = await Meme.countDocuments({ createdAt: { $gte: startOfToday }, status: { $ne: 'trash' } });
+    const pollsToday = await Poll.countDocuments({ createdAt: { $gte: startOfToday }, status: { $ne: 'trash' } });
+    const reportsToday = await Report.countDocuments({ createdAt: { $gte: startOfToday } });
     const todayActiveUsers = await User.countDocuments({ lastActive: { $gte: startOfToday } });
 
-    // Fetch active sockets from Socket.IO to show online
+    // Sockets status
     const io = getIo(req);
-    let onlineUsersCount = 0;
-    if (io) {
-      onlineUsersCount = io.sockets.sockets.size;
-    }
+    const onlineUsers = io ? io.sockets.sockets.size : 0;
+    const offlineUsers = Math.max(0, totalUsers - onlineUsers);
 
-    const offlineUsersCount = Math.max(0, totalUsers - onlineUsersCount);
-
-    // Fetch slow mode and maintenance settings
-    const slowmodeSetting = await Settings.findOne({ key: 'slow_mode_seconds' });
-    const slowModeSeconds = slowmodeSetting ? slowmodeSetting.value : 0;
-
-    const maintenanceSetting = await Settings.findOne({ key: 'maintenance_mode' });
-    const maintenanceMode = maintenanceSetting ? maintenanceSetting.value : false;
-
-    const maintenanceMsgSetting = await Settings.findOne({ key: 'maintenance_message' });
-    const maintenanceMessage = maintenanceMsgSetting ? maintenanceMsgSetting.value : '';
-
-    const announcementSetting = await Settings.findOne({ key: 'pinned_announcement' });
-    const pinnedAnnouncement = announcementSetting ? announcementSetting.value : '';
+    // Systems details
+    const dbStatus = mongoose.connection.readyState === 1 ? 'Operational' : 'Error';
+    const cloudinaryStatus = isCloudinaryConfigured() ? 'Configured' : 'Not Configured';
+    const socketStatus = io ? 'Active' : 'Offline';
 
     res.json({
       totalUsers,
+      onlineUsers,
+      offlineUsers,
       totalChatMessages,
       totalConfessions,
       totalMemes,
       totalPolls,
-      totalReports: totalReportsAll,
+      totalReports,
       totalReportsPending,
       bannedUsers,
       mutedUsers,
-      onlineUsers: onlineUsersCount,
-      offlineUsers: offlineUsersCount,
       todayActiveUsers,
-      slowModeSeconds,
-      maintenanceMode,
-      maintenanceMessage,
-      pinnedAnnouncement,
       today: {
         newUsers: newUsersToday,
         chatMessages: chatMessagesToday,
         confessions: confessionsToday,
-        memes: memesToday
+        memes: memesToday,
+        polls: pollsToday,
+        reports: reportsToday
+      },
+      systems: {
+        db: dbStatus,
+        cloudinary: cloudinaryStatus,
+        sockets: socketStatus,
+        server: 'Operational'
       }
     });
-  } catch (error) {
-    console.error('Error fetching admin stats:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch dashboard stats.' });
+  } catch (err) {
+    console.error('Error fetching admin stats:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve stats.' });
   }
 });
 
-// GET /api/admin/reports
+// GET /api/admin/reports - Fetch all pending reports
 router.get('/reports', requireAdmin, async (req, res) => {
   try {
-    const reports = await Report.find().sort({ createdAt: -1 });
-    res.json(reports);
+    const list = await Report.find({ status: 'pending' }).sort({ createdAt: -1 });
+    
+    // Enrich reports with details
+    const enrichedList = await Promise.all(list.map(async (r) => {
+      let targetDetails = '';
+      if (r.targetType === 'message') {
+        const msg = await LiveChatMessage.findById(r.targetId);
+        targetDetails = msg ? msg.text : '[Message Deleted]';
+      } else if (r.targetType === 'confession') {
+        const conf = await Confession.findById(r.targetId);
+        targetDetails = conf ? conf.text : '[Confession Deleted]';
+      } else if (r.targetType === 'meme') {
+        const meme = await Meme.findById(r.targetId);
+        targetDetails = meme ? `Meme attachment: ${meme.imageUrl} | Caption: ${meme.caption || 'None'}` : '[Meme Deleted]';
+      } else if (r.targetType === 'poll') {
+        const poll = await Poll.findById(r.targetId);
+        targetDetails = poll ? `Poll Question: ${poll.question}` : '[Poll Deleted]';
+      }
+
+      return {
+        ...r.toObject(),
+        targetDetails
+      };
+    }));
+
+    res.json(enrichedList);
   } catch (error) {
     console.error('Error fetching reports:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch reports.' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch reports list.' });
   }
 });
 
-// GET /api/admin/logs
+// GET /api/admin/logs - Fetch audit logs
 router.get('/logs', requireAdmin, async (req, res) => {
   try {
-    const logs = await AdminLog.find().sort({ createdAt: -1 }).limit(100);
-    res.json(logs);
+    const list = await AdminLog.find({}).sort({ createdAt: -1 }).limit(200);
+    res.json(list);
   } catch (error) {
-    console.error('Error fetching admin logs:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch logs.' });
+    console.error('Error fetching logs:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch audit logs.' });
   }
 });
 
-// DELETE /api/admin/message/:id
-router.delete('/message/:id', requireAdmin, async (req, res) => {
+// POST /api/admin/settings - Save site configurations
+router.post('/settings', requireAdmin, async (req, res) => {
   try {
-    const messageId = req.params.id;
-    const msg = await LiveChatMessage.findById(messageId).populate('sender', 'displayName');
-    if (!msg) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Message not found.' });
+    const updates = req.body;
+    for (const key of Object.keys(updates)) {
+      await Settings.findOneAndUpdate(
+        { key },
+        { value: updates[key] },
+        { upsert: true, new: true }
+      );
     }
-
-    await LiveChatMessage.findByIdAndDelete(messageId);
-
-    // Log action
-    await AdminLog.create({
-      action: 'DELETE_CHAT_MESSAGE',
-      details: `Deleted message by ${msg.sender?.displayName || 'Unknown'}: "${msg.text.substring(0, 50)}"`,
-      adminUsername: req.admin.username
-    });
 
     const io = getIo(req);
     if (io) {
-      io.emit('message-deleted', messageId);
-      io.to('admin').emit('moderation-activity', {
-        type: 'message_deleted',
-        text: `Message by ${msg.sender?.displayName || 'Unknown'} deleted`,
-        timestamp: new Date()
-      });
-      // Update counts
-      const totalChatMessages = await LiveChatMessage.countDocuments();
-      io.to('admin').emit('admin-stats-update', { totalChatMessages });
+      io.emit('settings-updated');
+      io.emit('online-stealth-update'); // In case stealth mode was toggled
     }
 
-    res.json({ message: 'Chat message deleted successfully.' });
+    res.json({ message: 'Settings saved successfully.' });
   } catch (error) {
-    console.error('Error deleting chat message:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to delete message.' });
+    console.error('Error saving settings:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to save settings.' });
   }
 });
-
-// DELETE /api/admin/confession/:id
-router.delete('/confession/:id', requireAdmin, async (req, res) => {
-  try {
-    const confessionId = req.params.id;
-    const confession = await Confession.findById(confessionId).populate('sender', 'displayName');
-    if (!confession) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Confession not found.' });
-    }
-
-    await Confession.findByIdAndDelete(confessionId);
-    
-    // Resolve any reports associated with this target
-    await Report.updateMany({ targetType: 'confession', targetId: confessionId }, { status: 'resolved' });
-
-    // Log action
-    await AdminLog.create({
-      action: 'DELETE_CONFESSION',
-      details: `Deleted confession by ${confession.sender?.displayName || 'Unknown'}: "${confession.text.substring(0, 50)}"`,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.emit('confession-deleted', confessionId);
-      io.to('admin').emit('moderation-activity', {
-        type: 'confession_deleted',
-        text: `Confession #${confessionId.slice(-6)} deleted`,
-        timestamp: new Date()
-      });
-      // Update counts
-      const totalConfessions = await Confession.countDocuments();
-      const totalReports = await Report.countDocuments({ status: 'pending' });
-      io.to('admin').emit('admin-stats-update', { totalConfessions, totalReports });
-    }
-
-    res.json({ message: 'Confession deleted successfully.' });
-  } catch (error) {
-    console.error('Error deleting confession:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to delete confession.' });
-  }
-});
-
-// DELETE /api/admin/meme/:id
-router.delete('/meme/:id', requireAdmin, async (req, res) => {
-  try {
-    const memeId = req.params.id;
-    const meme = await Meme.findById(memeId).populate('sender', 'displayName');
-    if (!meme) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Meme not found.' });
-    }
-
-    const publicId = meme.publicId || meme.cloudinaryPublicId;
-    if (publicId) {
-      try {
-        await cloudinary.uploader.destroy(publicId);
-      } catch (cloudinaryErr) {
-        console.error('Failed to destroy Cloudinary asset:', cloudinaryErr);
-      }
-    }
-
-    await Meme.findByIdAndDelete(memeId);
-    await Report.updateMany({ targetType: 'meme', targetId: memeId }, { status: 'resolved' });
-
-    // Log action
-    await AdminLog.create({
-      action: 'DELETE_MEME',
-      details: `Deleted meme by ${meme.sender?.displayName || 'Unknown'} with caption: "${meme.caption || 'No caption'}"`,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.emit('meme-deleted', memeId);
-      io.to('admin').emit('moderation-activity', {
-        type: 'meme_deleted',
-        text: `Meme #${memeId.slice(-6)} deleted`,
-        timestamp: new Date()
-      });
-      // Update counts
-      const totalMemes = await Meme.countDocuments();
-      const totalReports = await Report.countDocuments({ status: 'pending' });
-      io.to('admin').emit('admin-stats-update', { totalMemes, totalReports });
-    }
-
-    res.json({ message: 'Meme deleted successfully.' });
-  } catch (error) {
-    console.error('Error deleting meme:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to delete meme.' });
-  }
-});
-
-// DELETE /api/admin/poll/:id
-router.delete('/poll/:id', requireAdmin, async (req, res) => {
-  try {
-    const pollId = req.params.id;
-    const poll = await Poll.findById(pollId);
-    if (!poll) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Poll not found.' });
-    }
-
-    await Poll.findByIdAndDelete(pollId);
-
-    // Log action
-    await AdminLog.create({
-      action: 'DELETE_POLL',
-      details: `Deleted poll: "${poll.question}"`,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.emit('poll-deleted', pollId);
-      io.to('admin').emit('moderation-activity', {
-        type: 'poll_deleted',
-        text: `Poll #${pollId.slice(-6)} deleted`,
-        timestamp: new Date()
-      });
-      const totalPolls = await Poll.countDocuments();
-      io.to('admin').emit('admin-stats-update', { totalPolls });
-    }
-
-    res.json({ message: 'Poll deleted successfully.' });
-  } catch (error) {
-    console.error('Error deleting poll:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to delete poll.' });
-  }
-});
-
-// POST /api/admin/poll
-// Allows admin to create a new poll
-router.post('/poll', requireAdmin, async (req, res) => {
-  try {
-    const { question, options } = req.body;
-
-    if (!question || typeof question !== 'string' || question.trim() === '') {
-      return res.status(400).json({ error: 'INVALID_INPUT', message: 'Question text is required.' });
-    }
-
-    if (!options || !Array.isArray(options) || options.length < 2) {
-      return res.status(400).json({ error: 'INVALID_INPUT', message: 'At least two options are required.' });
-    }
-
-    // Resolve admin user ID (just use a mock sender or find the first user)
-    let adminSender = await User.findOne({ displayName: 'administrator' });
-    if (!adminSender) {
-      adminSender = await User.findOne(); // Grab any user if none
-    }
-
-    const pollOptions = options.map(opt => ({ text: opt.trim(), votes: [] }));
-
-    const poll = await Poll.create({
-      question: question.trim(),
-      options: pollOptions,
-      sender: adminSender ? adminSender._id : null,
-      campus: 'DSEU',
-      isActive: true
-    });
-
-    const populatedPoll = await Poll.findById(poll._id).populate('sender', 'displayName');
-
-    // Log action
-    await AdminLog.create({
-      action: 'CREATE_POLL',
-      details: `Created poll: "${poll.question}"`,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.emit('new-poll', populatedPoll);
-      io.to('admin').emit('moderation-activity', {
-        type: 'poll_created',
-        text: `New poll created: "${poll.question.substring(0, 40)}..."`,
-        timestamp: new Date()
-      });
-      const totalPolls = await Poll.countDocuments();
-      io.to('admin').emit('admin-stats-update', { totalPolls });
-    }
-
-    res.status(201).json(populatedPoll);
-  } catch (error) {
-    console.error('Error creating poll:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to create poll.' });
-  }
-});
-
-// POST /api/admin/user/:token/ban
-// Ban/Unban user by browser token
-router.post('/user/:token/ban', requireAdmin, async (req, res) => {
-  try {
-    const { token } = req.params;
-    const user = await User.findOne({ browserToken: token });
-
-    if (!user) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found with this browser token.' });
-    }
-
-    user.isBanned = !user.isBanned;
-    await user.save();
-
-    const actionText = user.isBanned ? 'BAN_USER' : 'UNBAN_USER';
-    const detailText = user.isBanned 
-      ? `Banned user "${user.displayName}" (Token: ${token})` 
-      : `Unbanned user "${user.displayName}" (Token: ${token})`;
-
-    await AdminLog.create({
-      action: actionText,
-      details: detailText,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.to('admin').emit('moderation-activity', {
-        type: user.isBanned ? 'user_banned' : 'user_unbanned',
-        text: detailText,
-        timestamp: new Date()
-      });
-      
-      // If banned, force client socket disconnect
-      if (user.isBanned) {
-        io.emit('user-banned-alert', token);
-      }
-
-      // Update counters
-      const bannedUsers = await User.countDocuments({ isBanned: true });
-      io.to('admin').emit('admin-stats-update', { bannedUsers });
-    }
-
-    res.json({ message: `User status updated. Banned: ${user.isBanned}`, isBanned: user.isBanned });
-  } catch (error) {
-    console.error('Error banning/unbanning user:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update user ban status.' });
-  }
-});
-
-// POST /api/admin/user/:token/mute
-router.post('/user/:token/mute', requireAdmin, async (req, res) => {
-  try {
-    const { token } = req.params;
-    const { durationMinutes } = req.body; // default 60 mins
-
-    const user = await User.findOne({ browserToken: token });
-    if (!user) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
-    }
-
-    const mins = parseInt(durationMinutes) || 60;
-    const mutedUntil = new Date(Date.now() + mins * 60 * 1000);
-
-    user.mutedUntil = mutedUntil;
-    await user.save();
-
-    const logText = `Muted user "${user.displayName}" for ${mins} minutes.`;
-    await AdminLog.create({
-      action: 'MUTE_USER',
-      details: logText,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.to('admin').emit('moderation-activity', {
-        type: 'user_muted',
-        text: logText,
-        timestamp: new Date()
-      });
-      io.emit('user-muted-alert', { token, mutedUntil });
-      
-      const mutedUsers = await User.countDocuments({ mutedUntil: { $gt: new Date() } });
-      io.to('admin').emit('admin-stats-update', { mutedUsers });
-    }
-
-    res.json({ message: `User muted for ${mins} minutes.`, mutedUntil });
-  } catch (error) {
-    console.error('Error muting user:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to mute user.' });
-  }
-});
-
-// POST /api/admin/user/:token/unmute
-router.post('/user/:token/unmute', requireAdmin, async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    const user = await User.findOne({ browserToken: token });
-    if (!user) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
-    }
-
-    user.mutedUntil = null;
-    await user.save();
-
-    const logText = `Unmuted user "${user.displayName}".`;
-    await AdminLog.create({
-      action: 'UNMUTE_USER',
-      details: logText,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.to('admin').emit('moderation-activity', {
-        type: 'user_unmuted',
-        text: logText,
-        timestamp: new Date()
-      });
-      io.emit('user-unmuted-alert', token);
-
-      const mutedUsers = await User.countDocuments({ mutedUntil: { $gt: new Date() } });
-      io.to('admin').emit('admin-stats-update', { mutedUsers });
-    }
-
-    res.json({ message: 'User unmuted successfully.' });
-  } catch (error) {
-    console.error('Error unmuting user:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to unmute user.' });
-  }
-});
-
-// POST /api/admin/slowmode
-// Set slowmode seconds (0 to disable)
-router.post('/slowmode', requireAdmin, async (req, res) => {
-  try {
-    const { seconds } = req.body;
-    const slowmodeSeconds = parseInt(seconds) >= 0 ? parseInt(seconds) : 0;
-
-    await Settings.findOneAndUpdate(
-      { key: 'slow_mode_seconds' },
-      { value: slowmodeSeconds },
-      { upsert: true, new: true }
-    );
-
-    const logText = slowmodeSeconds > 0 
-      ? `Enabled global chat slow mode (${slowmodeSeconds}s).` 
-      : 'Disabled global chat slow mode.';
-
-    await AdminLog.create({
-      action: 'TOGGLE_SLOW_MODE',
-      details: logText,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.emit('slow-mode-update', slowmodeSeconds);
-      io.to('admin').emit('moderation-activity', {
-        type: 'slowmode_changed',
-        text: logText,
-        timestamp: new Date()
-      });
-    }
-
-    res.json({ message: 'Slow mode setting updated.', slowmodeSeconds });
-  } catch (error) {
-    console.error('Error updating slow mode:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update slow mode.' });
-  }
-});
-
-// POST /api/admin/announcement
-// Pins a global campus announcement
-router.post('/announcement', requireAdmin, async (req, res) => {
-  try {
-    const { text } = req.body;
-    const announcementText = (text && typeof text === 'string') ? text.trim() : '';
-
-    await Settings.findOneAndUpdate(
-      { key: 'pinned_announcement' },
-      { value: announcementText },
-      { upsert: true, new: true }
-    );
-
-    const logText = announcementText !== '' 
-      ? `Updated pinned announcement: "${announcementText.substring(0, 50)}..."` 
-      : 'Removed pinned announcement.';
-
-    await AdminLog.create({
-      action: 'PIN_ANNOUNCEMENT',
-      details: logText,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      io.emit('announcement-update', announcementText);
-      io.to('admin').emit('moderation-activity', {
-        type: 'announcement_changed',
-        text: logText,
-        timestamp: new Date()
-      });
-    }
-
-    res.json({ message: 'Announcement updated successfully.', announcement: announcementText });
-  } catch (error) {
-    console.error('Error updating announcement:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update announcement.' });
-  }
-});
-
-// GET /api/admin/search/identities
-// Search users by display name or token
-router.get('/search/identities', requireAdmin, async (req, res) => {
-  try {
-    const { query } = req.query;
-    if (!query) {
-      return res.json([]);
-    }
-
-    const users = await User.find({
-      $or: [
-        { displayName: { $regex: query, $options: 'i' } },
-        { browserToken: { $regex: query, $options: 'i' } }
-      ]
-    }).limit(20);
-
-    res.json(users);
-  } catch (error) {
-    console.error('Error searching identities:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to search identities.' });
-  }
-});
-
-// GET /api/admin/search/content
-// Search chat messages, confessions, and memes by keyword
-router.get('/search/content', requireAdmin, async (req, res) => {
-  try {
-    const { query } = req.query;
-    if (!query) {
-      return res.json({ messages: [], confessions: [], memes: [] });
-    }
-
-    const messages = await LiveChatMessage.find({ text: { $regex: query, $options: 'i' } })
-      .populate('sender', 'displayName')
-      .limit(20);
-
-    const confessions = await Confession.find({ text: { $regex: query, $options: 'i' } })
-      .populate('sender', 'displayName')
-      .limit(20);
-
-    const memes = await Meme.find({ caption: { $regex: query, $options: 'i' } })
-      .populate('sender', 'displayName')
-      .limit(20);
-
-    res.json({ messages, confessions, memes });
-  } catch (error) {
-    console.error('Error searching content:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to search content.' });
-  }
-});
-
-// POST /api/admin/report/:id/resolve
-router.post('/report/:id/resolve', requireAdmin, async (req, res) => {
-  try {
-    const reportId = req.params.id;
-    const report = await Report.findById(reportId);
-    if (!report) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Report not found.' });
-    }
-
-    report.status = 'resolved';
-    await report.save();
-
-    await AdminLog.create({
-      action: 'RESOLVE_REPORT',
-      details: `Resolved report #${reportId.slice(-6)}`,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      const totalReports = await Report.countDocuments({ status: 'pending' });
-      io.to('admin').emit('admin-stats-update', { totalReports });
-      io.to('admin').emit('report-resolved', reportId);
-    }
-
-    res.json({ message: 'Report marked as resolved.' });
-  } catch (error) {
-    console.error('Error resolving report:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to resolve report.' });
-  }
-});
-
-// POST /api/admin/maintenance - Toggle maintenance mode
-router.post('/maintenance', requireAdmin, async (req, res) => {
-  try {
-    const { enabled, message } = req.body;
-    const maintenanceEnabled = !!enabled;
-    const maintenanceMsg = (message && typeof message === 'string') ? message.trim() : 'DSEU Unfiltered is currently undergoing scheduled maintenance. Please check back later!';
-
-    await Settings.findOneAndUpdate(
-      { key: 'maintenance_mode' },
-      { value: maintenanceEnabled },
-      { upsert: true }
-    );
-
-    await Settings.findOneAndUpdate(
-      { key: 'maintenance_message' },
-      { value: maintenanceMsg },
-      { upsert: true }
-    );
-
-    const logText = maintenanceEnabled
-      ? `Enabled Maintenance Mode with message: "${maintenanceMsg.substring(0, 50)}..."`
-      : 'Disabled Maintenance Mode.';
-
-    await AdminLog.create({
-      action: 'TOGGLE_MAINTENANCE',
-      details: logText,
-      adminUsername: req.admin.username
-    });
-
-    const io = getIo(req);
-    if (io) {
-      // Emit event to public clients to trigger immediate maintenance screen
-      io.emit('maintenance-mode-update', { enabled: maintenanceEnabled, message: maintenanceMsg });
-      io.to('admin').emit('moderation-activity', {
-        type: 'maintenance_changed',
-        text: logText,
-        timestamp: new Date()
-      });
-    }
-
-    res.json({ message: 'Maintenance mode updated successfully.', enabled: maintenanceEnabled, messageText: maintenanceMsg });
-  } catch (error) {
-    console.error('Error toggling maintenance mode:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update maintenance settings.' });
-  }
-});
-
-// POST /api/admin/backup - Trigger manual database backup
-router.post('/backup', requireAdmin, async (req, res) => {
-  try {
-    const backupResult = await runDatabaseBackup();
-
-    if (backupResult.status === 'success') {
-      await AdminLog.create({
-        action: 'MANUAL_BACKUP',
-        details: `Triggered manual database backup to ${backupResult.folder} (${backupResult.sizeKb} KB)`,
-        adminUsername: req.admin.username
-      });
-
-      const io = getIo(req);
-      if (io) {
-        io.to('admin').emit('moderation-activity', {
-          type: 'backup_completed',
-          text: `Database backup completed successfully (${backupResult.sizeKb} KB)`,
-          timestamp: new Date()
-        });
-      }
-
-      res.json(backupResult);
-    } else {
-      res.status(500).json({ error: 'BACKUP_FAILED', message: backupResult.error || 'Failed to complete database backup.' });
-    }
-  } catch (error) {
-    console.error('Error triggering manual backup:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Backup execution error.' });
-  }
-});
-
-// GET /api/admin/backup/status - Fetch last backup metadata status
-router.get('/backup/status', requireAdmin, async (req, res) => {
-  try {
-    const statusSetting = await Settings.findOne({ key: 'last_backup_status' });
-    res.json(statusSetting ? statusSetting.value : { status: 'none', timestamp: null });
-  } catch (error) {
-    console.error('Error fetching backup status:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch backup status metadata.' });
-  }
-});
-
-const isCloudinaryConfigured = () => {
-  return !!(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET
-  );
-};
 
 // GET /api/admin/users - Paginated user management table
 router.get('/users', requireAdmin, async (req, res) => {
@@ -871,11 +327,7 @@ router.get('/users', requireAdmin, async (req, res) => {
     const activeUsers = req.app.get('activeUsers') || new Map();
     const onlineTokens = Array.from(activeUsers.values()).map(u => u.browserToken);
 
-    // Build pipeline
-    const pipeline = [];
-
-    // Match conditions
-    const match = {};
+    const match = { role: { $ne: 'admin' } };
     if (search) {
       const orConditions = [
         { displayName: { $regex: search, $options: 'i' } },
@@ -900,90 +352,32 @@ router.get('/users', requireAdmin, async (req, res) => {
       match.browserToken = { $in: reportedTokens };
     }
 
-    pipeline.push({ $match: match });
+    const sortOption = {};
+    if (sort === 'newest') sortOption.createdAt = -1;
+    else if (sort === 'oldest') sortOption.createdAt = 1;
+    else if (sort === 'most_active') sortOption.lastActive = -1;
+    else sortOption.lastActive = -1;
 
-    // Lookups for counts
-    pipeline.push(
-      {
-        $lookup: {
-          from: 'livechatmessages',
-          localField: '_id',
-          foreignField: 'sender',
-          as: 'chats'
-        }
-      },
-      {
-        $lookup: {
-          from: 'confessions',
-          localField: '_id',
-          foreignField: 'sender',
-          as: 'confessions'
-        }
-      },
-      {
-        $lookup: {
-          from: 'memes',
-          localField: '_id',
-          foreignField: 'sender',
-          as: 'memes'
-        }
-      }
-    );
-
-    // Project counts
-    pipeline.push({
-      $project: {
-        displayName: 1,
-        browserToken: 1,
-        campus: 1,
-        isBanned: 1,
-        mutedUntil: 1,
-        lastActive: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        chatCount: { $size: '$chats' },
-        confessionCount: { $size: '$confessions' },
-        memeCount: { $size: '$memes' }
-      }
-    });
-
-    // Add activity sum
-    pipeline.push({
-      $addFields: {
-        totalActivity: { $add: ['$chatCount', '$confessionCount', '$memeCount'] }
-      }
-    });
-
-    // Sort
-    if (sort === 'newest') {
-      pipeline.push({ $sort: { createdAt: -1 } });
-    } else if (sort === 'oldest') {
-      pipeline.push({ $sort: { createdAt: 1 } });
-    } else if (sort === 'most_active') {
-      pipeline.push({ $sort: { totalActivity: -1, lastActive: -1 } });
-    } else if (sort === 'least_active') {
-      pipeline.push({ $sort: { totalActivity: 1, lastActive: 1 } });
-    } else {
-      pipeline.push({ $sort: { lastActive: -1 } });
-    }
-
-    // Get total count for pagination
-    const allMatching = await User.aggregate([{ $match: match }, { $count: 'count' }]);
-    const totalUsers = allMatching.length > 0 ? allMatching[0].count : 0;
+    const totalUsers = await User.countDocuments(match);
     const totalPages = Math.ceil(totalUsers / limit);
 
-    // Apply pagination
-    pipeline.push({ $skip: (page - 1) * limit });
-    pipeline.push({ $limit: limit });
+    const list = await User.find(match)
+      .sort(sortOption)
+      .skip((page - 1) * limit)
+      .limit(limit);
 
-    const paginatedUsers = await User.aggregate(pipeline);
-
-    // Fetch Poll and Report counts and online status for each user
-    const usersWithDetails = await Promise.all(paginatedUsers.map(async (u) => {
-      const pollCount = await Poll.countDocuments({ "options.votes": u.browserToken });
+    const usersWithCounts = await Promise.all(list.map(async (u) => {
+      const chatCount = await LiveChatMessage.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
+      const confessionCount = await Confession.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
+      const memeCount = await Meme.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
+      const pollCount = await Poll.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
       const reportCount = await Report.countDocuments({ reporterToken: u.browserToken });
+
       return {
-        ...u,
+        ...u.toObject(),
+        chatCount,
+        confessionCount,
+        memeCount,
         pollCount,
         reportCount,
         isOnline: onlineTokens.includes(u.browserToken)
@@ -991,7 +385,7 @@ router.get('/users', requireAdmin, async (req, res) => {
     }));
 
     res.json({
-      users: usersWithDetails,
+      users: usersWithCounts,
       pagination: {
         totalUsers,
         totalPages,
@@ -1000,50 +394,29 @@ router.get('/users', requireAdmin, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch users list.' });
+    console.error('Error listing users:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to load users.' });
   }
 });
 
-// GET /api/admin/user/:id/profile - Fetch a user's full activity history
+// GET /api/admin/user/:id/profile - User Profile overview details
 router.get('/user/:id/profile', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id);
-    if (!user) {
+    const userObj = await User.findById(id);
+    if (!userObj) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
     }
 
-    const activeUsers = req.app.get('activeUsers') || new Map();
-    const isOnline = Array.from(activeUsers.values()).some(u => u.browserToken === user.browserToken);
-
-    // Fetch all user messages, confessions, memes, polls, and reports
-    const chats = await LiveChatMessage.find({ sender: id }).sort({ createdAt: -1 });
-    const confessions = await Confession.find({ sender: id }).sort({ createdAt: -1 });
-    const memes = await Meme.find({ sender: id }).sort({ createdAt: -1 });
-    
-    // Voted polls
-    const polls = await Poll.find({ "options.votes": user.browserToken }).sort({ createdAt: -1 });
-    
-    // Reports submitted by them
-    const reports = await Report.find({ reporterToken: user.browserToken }).sort({ createdAt: -1 });
-
-    // Fetch ban/mute history logs
-    const logs = await AdminLog.find({
-      details: { $regex: user.displayName, $options: 'i' }
-    }).sort({ createdAt: -1 });
+    const chats = await LiveChatMessage.find({ sender: id, status: { $ne: 'trash' } }).sort({ createdAt: -1 });
+    const confessions = await Confession.find({ sender: id, status: { $ne: 'trash' } }).sort({ createdAt: -1 });
+    const memes = await Meme.find({ sender: id, status: { $ne: 'trash' } }).sort({ createdAt: -1 });
+    const polls = await Poll.find({ sender: id, status: { $ne: 'trash' } }).sort({ createdAt: -1 });
+    const reports = await Report.find({ reporterToken: userObj.browserToken }).sort({ createdAt: -1 });
+    const logs = await AdminLog.find({ details: { $regex: userObj.displayName, $options: 'i' } }).sort({ createdAt: -1 });
 
     res.json({
-      profile: {
-        _id: user._id,
-        displayName: user.displayName,
-        browserToken: user.browserToken,
-        createdAt: user.createdAt,
-        lastActive: user.lastActive,
-        isBanned: user.isBanned,
-        mutedUntil: user.mutedUntil,
-        isOnline
-      },
+      profile: userObj,
       chats,
       confessions,
       memes,
@@ -1053,11 +426,101 @@ router.get('/user/:id/profile', requireAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching user profile:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch user profile.' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch profile.' });
   }
 });
 
-// POST /api/admin/user/:id/reset-identity - Regenerate anonymous nickname
+// POST /api/admin/user/:id/warn - Add warning to user
+router.post('/user/:id/warn', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    if (!reason || reason.trim() === '') {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'Warning reason is required.' });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
+    }
+
+    user.warnings.push({ reason: reason.trim() });
+    await user.save();
+
+    const detailText = `Warned user "${user.displayName}" (Warning #${user.warnings.length}): "${reason}"`;
+    await AdminLog.create({
+      action: 'WARN_USER',
+      details: detailText,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.to('admin').emit('moderation-activity', {
+        type: 'user_warned',
+        text: detailText,
+        timestamp: new Date()
+      });
+      // Emit warning to target user socket connection
+      io.emit('user-warned', { browserToken: user.browserToken, reason: reason.trim(), warningsCount: user.warnings.length });
+    }
+
+    res.json({ message: 'Warning added successfully.', warnings: user.warnings });
+  } catch (error) {
+    console.error('Error warning user:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to warn user.' });
+  }
+});
+
+// POST /api/admin/user/:id/unwarn - Remove warning
+router.post('/user/:id/unwarn', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { warningId } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
+    }
+
+    user.warnings = user.warnings.filter(w => w._id.toString() !== warningId);
+    await user.save();
+
+    await AdminLog.create({
+      action: 'REMOVE_WARNING',
+      details: `Removed warning #${warningId} from user "${user.displayName}"`,
+      adminUsername: req.admin.username
+    });
+
+    res.json({ message: 'Warning removed successfully.', warnings: user.warnings });
+  } catch (error) {
+    console.error('Error removing warning:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to remove warning.' });
+  }
+});
+
+// POST /api/admin/user/:id/notes - Save admin private notes
+router.post('/user/:id/notes', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
+    }
+
+    user.adminNotes = notes || '';
+    await user.save();
+
+    res.json({ message: 'Admin notes saved.', notes: user.adminNotes });
+  } catch (error) {
+    console.error('Error updating admin notes:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update notes.' });
+  }
+});
+
+// POST /api/admin/user/:id/reset-identity
 router.post('/user/:id/reset-identity', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1085,7 +548,6 @@ router.post('/user/:id/reset-identity', requireAdmin, async (req, res) => {
         text: logMsg,
         timestamp: new Date()
       });
-      // Emit event to update client lists in real time
       io.emit('user-identity-reset', { userId: user._id, oldName, newName });
     }
 
@@ -1096,10 +558,10 @@ router.post('/user/:id/reset-identity', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/user/bulk-action - Perform batch ban/mute/delete/reset operations
+// POST /api/admin/user/bulk-action - Batch actions
 router.post('/user/bulk-action', requireAdmin, async (req, res) => {
   try {
-    const { userIds, action, durationMinutes } = req.body;
+    const { userIds, action, durationMinutes, banReason } = req.body;
     if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'User IDs array is required.' });
     }
@@ -1117,12 +579,18 @@ router.post('/user/bulk-action', requireAdmin, async (req, res) => {
 
         if (action === 'ban') {
           user.isBanned = true;
+          user.banReason = banReason || 'Violated community guidelines';
+          user.bannedBy = 'Professor';
+          user.banDate = new Date();
           await user.save();
           if (io) {
             io.emit('user-banned-alert', user.browserToken);
           }
         } else if (action === 'unban') {
           user.isBanned = false;
+          user.banReason = '';
+          user.bannedBy = '';
+          user.banDate = null;
           await user.save();
         } else if (action === 'mute') {
           const mins = parseInt(durationMinutes) || 60;
@@ -1138,201 +606,716 @@ router.post('/user/bulk-action', requireAdmin, async (req, res) => {
         } else if (action === 'reset-identity') {
           user.displayName = await generateUniqueIdentity();
           await user.save();
+        } else if (action === 'shadow-ban') {
+          user.isShadowBanned = true;
+          await user.save();
+        } else if (action === 'unshadow-ban') {
+          user.isShadowBanned = false;
+          await user.save();
         } else if (action === 'delete') {
-          // Delete all memes from Cloudinary
-          const userMemes = await Meme.find({ sender: id });
-          for (const meme of userMemes) {
-            const pId = meme.publicId || meme.cloudinaryPublicId;
-            if (pId && isCloudinaryConfigured()) {
-              try {
-                await cloudinary.uploader.destroy(pId);
-              } catch (err) {
-                console.error('Error destroying Cloudinary asset during bulk delete:', err);
-              }
-            }
-          }
-          // Delete all database records for this user
-          await Meme.deleteMany({ sender: id });
-          await Confession.deleteMany({ sender: id });
-          await LiveChatMessage.deleteMany({ sender: id });
+          // Soft-delete user posts
+          await LiveChatMessage.updateMany({ sender: id }, { status: 'trash', deletedAt: new Date() });
+          await Confession.updateMany({ sender: id }, { status: 'trash', deletedAt: new Date() });
+          await Meme.updateMany({ sender: id }, { status: 'trash', deletedAt: new Date() });
+          await Poll.updateMany({ sender: id }, { status: 'trash', deletedAt: new Date() });
           await User.deleteOne({ _id: id });
         } else if (action === 'delete-messages') {
-          await LiveChatMessage.deleteMany({ sender: id });
+          await LiveChatMessage.updateMany({ sender: id }, { status: 'trash', deletedAt: new Date() });
         } else if (action === 'delete-memes') {
-          const userMemes = await Meme.find({ sender: id });
-          for (const meme of userMemes) {
-            const pId = meme.publicId || meme.cloudinaryPublicId;
-            if (pId && isCloudinaryConfigured()) {
-              try {
-                await cloudinary.uploader.destroy(pId);
-              } catch (err) {
-                console.error('Error destroying Cloudinary asset:', err);
-              }
-            }
-          }
-          await Meme.deleteMany({ sender: id });
+          await Meme.updateMany({ sender: id }, { status: 'trash', deletedAt: new Date() });
         } else if (action === 'delete-confessions') {
-          await Confession.deleteMany({ sender: id });
+          await Confession.updateMany({ sender: id }, { status: 'trash', deletedAt: new Date() });
         } else if (action === 'delete-polls') {
-          await Poll.deleteMany({ sender: id });
+          await Poll.updateMany({ sender: id }, { status: 'trash', deletedAt: new Date() });
         }
 
         results.updated++;
       } catch (err) {
-        console.error(`Error processing bulk user action for ID ${id}:`, err);
         results.failed++;
       }
     }
 
-    // Log bulk action
-    const logDetails = `Executed bulk action "${action}" on ${results.updated} users (Failed: ${results.failed})`;
-    await AdminLog.create({
-      action: `BULK_${action.toUpperCase()}`,
-      details: logDetails,
-      adminUsername: req.admin.username
-    });
-
     if (io) {
-      io.to('admin').emit('moderation-activity', {
-        type: `bulk_${action}`,
-        text: logDetails,
-        timestamp: new Date()
-      });
-      // Emit trigger to refresh lists
       io.emit('bulk-moderation-update');
+      io.emit('online-stealth-update');
     }
 
-    res.json({ message: 'Bulk action completed.', results });
+    res.json({ message: 'Bulk actions processed successfully.', results });
   } catch (error) {
-    console.error('Error executing bulk user action:', error);
+    console.error('Error performing bulk actions:', error);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to process bulk actions.' });
   }
 });
 
-// POST /api/admin/content/bulk-delete - Delete multiple posts or reports at once
-router.post('/content/bulk-delete', requireAdmin, async (req, res) => {
+// Soft Delete (Trash Bin) Endpoints
+
+// GET /api/admin/trash - Get all items marked as trash
+router.get('/trash', requireAdmin, async (req, res) => {
   try {
-    const { targetIds, targetType } = req.body;
-    if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0) {
-      return res.status(400).json({ error: 'BAD_REQUEST', message: 'Target IDs array is required.' });
-    }
+    const messages = await LiveChatMessage.find({ status: 'trash' }).populate('sender', 'displayName');
+    const confessions = await Confession.find({ status: 'trash' }).populate('sender', 'displayName');
+    const memes = await Meme.find({ status: 'trash' }).populate('sender', 'displayName');
+    const polls = await Poll.find({ status: 'trash' }).populate('sender', 'displayName');
 
-    const io = getIo(req);
-    let deletedCount = 0;
+    res.json({
+      messages,
+      confessions,
+      memes,
+      polls
+    });
+  } catch (error) {
+    console.error('Error fetching trash list:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch trash items.' });
+  }
+});
 
-    if (targetType === 'meme') {
-      const memes = await Meme.find({ _id: { $in: targetIds } });
-      for (const m of memes) {
-        const pId = m.publicId || m.cloudinaryPublicId;
-        if (pId && isCloudinaryConfigured()) {
-          try {
-            await cloudinary.uploader.destroy(pId);
-          } catch (err) {
-            console.error('Error destroying Cloudinary asset:', err);
-          }
-        }
-      }
-      const result = await Meme.deleteMany({ _id: { $in: targetIds } });
-      deletedCount = result.deletedCount;
-      if (io) {
-        targetIds.forEach(id => io.emit('meme-deleted', id));
-      }
+// POST /api/admin/trash/restore - Restore soft-deleted content
+router.post('/trash/restore', requireAdmin, async (req, res) => {
+  try {
+    const { targetId, targetType } = req.body;
+    let restoredItem = null;
+
+    if (targetType === 'message') {
+      restoredItem = await LiveChatMessage.findByIdAndUpdate(targetId, { status: 'active', deletedAt: null }, { new: true });
     } else if (targetType === 'confession') {
-      const result = await Confession.deleteMany({ _id: { $in: targetIds } });
-      deletedCount = result.deletedCount;
-      if (io) {
-        targetIds.forEach(id => io.emit('confession-deleted', id));
-      }
-    } else if (targetType === 'report') {
-      const result = await Report.deleteMany({ _id: { $in: targetIds } });
-      deletedCount = result.deletedCount;
-    } else if (targetType === 'message') {
-      const result = await LiveChatMessage.deleteMany({ _id: { $in: targetIds } });
-      deletedCount = result.deletedCount;
-      if (io) {
-        targetIds.forEach(id => io.emit('chat-message-deleted', id));
-      }
+      restoredItem = await Confession.findByIdAndUpdate(targetId, { status: 'active', deletedAt: null }, { new: true });
+    } else if (targetType === 'meme') {
+      restoredItem = await Meme.findByIdAndUpdate(targetId, { status: 'active', deletedAt: null }, { new: true });
+    } else if (targetType === 'poll') {
+      restoredItem = await Poll.findByIdAndUpdate(targetId, { status: 'active', deletedAt: null }, { new: true });
     }
 
-    const logDetails = `Bulk deleted ${deletedCount} ${targetType}s`;
+    if (!restoredItem) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Item not found.' });
+    }
+
     await AdminLog.create({
-      action: `BULK_DELETE_${targetType.toUpperCase()}`,
-      details: logDetails,
+      action: 'RESTORE_CONTENT',
+      details: `Restored ${targetType} (ID: ${targetId})`,
       adminUsername: req.admin.username
     });
 
+    const io = getIo(req);
     if (io) {
-      io.to('admin').emit('moderation-activity', {
-        type: `bulk_delete_${targetType}`,
-        text: logDetails,
-        timestamp: new Date()
+      io.emit('trash-restored', { targetId, targetType });
+      io.emit('bulk-moderation-update');
+    }
+
+    res.json({ message: 'Item restored successfully.' });
+  } catch (error) {
+    console.error('Error restoring trash item:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to restore item.' });
+  }
+});
+
+// POST /api/admin/trash/delete - Permanently delete soft-deleted content
+router.post('/trash/delete', requireAdmin, async (req, res) => {
+  try {
+    const { targetId, targetType } = req.body;
+    let deleted = false;
+
+    if (targetType === 'message') {
+      await LiveChatMessage.findByIdAndDelete(targetId);
+      deleted = true;
+    } else if (targetType === 'confession') {
+      await Confession.findByIdAndDelete(targetId);
+      await Report.deleteMany({ targetType: 'confession', targetId });
+      deleted = true;
+    } else if (targetType === 'meme') {
+      const meme = await Meme.findById(targetId);
+      if (meme) {
+        const publicId = meme.publicId || meme.cloudinaryPublicId;
+        if (publicId && isCloudinaryConfigured()) {
+          try {
+            await cloudinary.uploader.destroy(publicId);
+          } catch (err) {
+            console.error('Cloudinary destroy failure during perm delete:', err);
+          }
+        }
+        await Meme.findByIdAndDelete(targetId);
+        await Report.deleteMany({ targetType: 'meme', targetId });
+        deleted = true;
+      }
+    } else if (targetType === 'poll') {
+      await Poll.findByIdAndDelete(targetId);
+      await Report.deleteMany({ targetType: 'poll', targetId });
+      deleted = true;
+    }
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Item not found.' });
+    }
+
+    await AdminLog.create({
+      action: 'PERM_DELETE_CONTENT',
+      details: `Permanently deleted ${targetType} (ID: ${targetId})`,
+      adminUsername: req.admin.username
+    });
+
+    res.json({ message: 'Item permanently deleted.' });
+  } catch (error) {
+    console.error('Error permanently deleting item:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to delete item.' });
+  }
+});
+
+// DELETE Chat / Confessions / Memes / Polls (Soft Delete mappings)
+router.delete('/message/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const msg = await LiveChatMessage.findById(id).populate('sender', 'displayName');
+    if (!msg) return res.status(404).json({ error: 'NOT_FOUND', message: 'Message not found.' });
+
+    msg.status = 'trash';
+    msg.deletedAt = new Date();
+    await msg.save();
+
+    await AdminLog.create({
+      action: 'SOFT_DELETE_MESSAGE',
+      details: `Soft-deleted message from ${msg.sender?.displayName || 'Unknown'}: "${msg.text.substring(0, 40)}"`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('message-deleted', id);
+    }
+
+    res.json({ message: 'Message moved to trash bin.' });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to soft delete.' });
+  }
+});
+
+router.delete('/confession/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const conf = await Confession.findById(id).populate('sender', 'displayName');
+    if (!conf) return res.status(404).json({ error: 'NOT_FOUND', message: 'Confession not found.' });
+
+    conf.status = 'trash';
+    conf.deletedAt = new Date();
+    await conf.save();
+
+    await AdminLog.create({
+      action: 'SOFT_DELETE_CONFESSION',
+      details: `Soft-deleted confession from ${conf.sender?.displayName || 'Unknown'}: "${conf.text.substring(0, 40)}"`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('confession-deleted', id);
+    }
+
+    res.json({ message: 'Confession moved to trash bin.' });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to soft delete.' });
+  }
+});
+
+router.delete('/meme/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const meme = await Meme.findById(id).populate('sender', 'displayName');
+    if (!meme) return res.status(404).json({ error: 'NOT_FOUND', message: 'Meme not found.' });
+
+    meme.status = 'trash';
+    meme.deletedAt = new Date();
+    await meme.save();
+
+    await AdminLog.create({
+      action: 'SOFT_DELETE_MEME',
+      details: `Soft-deleted meme from ${meme.sender?.displayName || 'Unknown'}`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('meme-deleted', id);
+    }
+
+    res.json({ message: 'Meme moved to trash bin.' });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to soft delete.' });
+  }
+});
+
+router.delete('/poll/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const poll = await Poll.findById(id);
+    if (!poll) return res.status(404).json({ error: 'NOT_FOUND', message: 'Poll not found.' });
+
+    poll.status = 'trash';
+    poll.deletedAt = new Date();
+    await poll.save();
+
+    await AdminLog.create({
+      action: 'SOFT_DELETE_POLL',
+      details: `Soft-deleted poll: "${poll.question}"`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('poll-deleted', id);
+    }
+
+    res.json({ message: 'Poll moved to trash bin.' });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to soft delete.' });
+  }
+});
+
+// Support Inbox Conversations
+
+// GET /api/admin/support/conversations - List support threads
+router.get('/support/conversations', requireAdmin, async (req, res) => {
+  try {
+    const search = req.query.search || '';
+    const filter = req.query.filter || 'all'; // 'all', 'unread'
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    // Aggregate tokens
+    const tokens = await SupportMessage.distinct('browserToken');
+
+    const conversationList = [];
+
+    for (const token of tokens) {
+      const user = await User.findOne({ browserToken: token });
+      if (!user) continue;
+
+      if (search && !user.displayName.match(new RegExp(search, 'i')) && !token.match(new RegExp(search, 'i'))) {
+        continue;
+      }
+
+      const unreadCount = await SupportMessage.countDocuments({ browserToken: token, senderType: 'user', isSeen: false });
+      
+      if (filter === 'unread' && unreadCount === 0) {
+        continue;
+      }
+
+      const lastMsg = await SupportMessage.findOne({ browserToken: token }).sort({ createdAt: -1 });
+
+      conversationList.push({
+        user: {
+          id: user._id,
+          displayName: user.displayName,
+          browserToken: token,
+          isBanned: user.isBanned,
+          banReason: user.banReason,
+          lastActive: user.lastActive
+        },
+        unreadCount,
+        lastMessage: lastMsg
       });
     }
 
-    res.json({ message: `${deletedCount} items deleted successfully.` });
+    // Sort by last message date
+    conversationList.sort((a, b) => {
+      const dateA = a.lastMessage ? new Date(a.lastMessage.createdAt) : new Date(0);
+      const dateB = b.lastMessage ? new Date(b.lastMessage.createdAt) : new Date(0);
+      return dateB - dateA;
+    });
+
+    const totalConversations = conversationList.length;
+    const totalPages = Math.ceil(totalConversations / limit);
+    const paginatedList = conversationList.slice((page - 1) * limit, page * limit);
+
+    res.json({
+      conversations: paginatedList,
+      pagination: {
+        totalConversations,
+        totalPages,
+        currentPage: page,
+        limit
+      }
+    });
   } catch (error) {
-    console.error('Error in bulk content delete:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to bulk delete content.' });
+    console.error('Error fetching support conversations:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to load conversations.' });
   }
 });
 
-// GET /api/admin/reports - Fetch all reports
-router.get('/reports', requireAdmin, async (req, res) => {
+// GET /api/admin/support/conversation/:token - Get full history
+router.get('/support/conversation/:token', requireAdmin, async (req, res) => {
   try {
-    const reports = await Report.find().sort({ createdAt: -1 });
-    res.json(reports);
+    const { token } = req.params;
+    const messages = await SupportMessage.find({ browserToken: token }).sort({ createdAt: 1 });
+    res.json(messages);
   } catch (error) {
-    console.error('Error fetching reports:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch reports list.' });
+    console.error('Error fetching conversation messages:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch conversation thread.' });
   }
 });
 
-// POST /api/admin/report/:id/action - Act on a specific content report
+// POST /api/admin/support/seen/:token - Mark user messages as read by admin
+router.post('/support/seen/:token', requireAdmin, async (req, res) => {
+  try {
+    const { token } = req.params;
+    await SupportMessage.updateMany(
+      { browserToken: token, senderType: 'user', isSeen: false },
+      { $set: { isSeen: true } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking seen:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update seen receipts.' });
+  }
+});
+
+// POST /api/admin/support/reply - Send admin reply message
+router.post('/support/reply', requireAdmin, (req, res, next) => {
+  upload.single('attachment')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: 'UPLOAD_FAILED', message: err.message });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const { token, text } = req.body;
+    const file = req.file;
+
+    if (!token) return res.status(400).json({ error: 'BAD_REQUEST', message: 'Target user browserToken is required.' });
+    if ((!text || text.trim() === '') && !file) return res.status(400).json({ error: 'EMPTY_REPLY', message: 'Reply content cannot be empty.' });
+
+    let imageUrl = '';
+    if (file) {
+      if (isCloudinaryConfigured()) {
+        const uploadResult = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: 'dseu-unfiltered/support' },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          );
+          stream.end(file.buffer);
+        });
+        imageUrl = uploadResult.secure_url;
+      } else {
+        const fs = await import('fs');
+        const path = await import('path');
+        const crypto = await import('crypto');
+
+        const uploadsDir = path.join(process.cwd(), 'uploads');
+        if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+        const ext = path.extname(file.originalname) || '.png';
+        const filename = `${crypto.randomUUID()}${ext}`;
+        const filePath = path.join(uploadsDir, filename);
+
+        fs.writeFileSync(filePath, file.buffer);
+        imageUrl = `/uploads/${filename}`;
+      }
+    }
+
+    const message = await SupportMessage.create({
+      browserToken: token,
+      senderType: 'admin',
+      senderName: 'Professor (ADMIN)',
+      text: text ? text.trim() : '',
+      imageUrl: imageUrl,
+      isSeen: false
+    });
+
+    await AdminLog.create({
+      action: 'SUPPORT_REPLY',
+      details: `Replied to support thread for token ${token.substring(0, 10)}...`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.to(`support-${token}`).emit('support-message', message);
+      io.to('admin').emit('support-message', message);
+    }
+
+    res.status(201).json(message);
+  } catch (error) {
+    console.error('Error replying in support:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to send reply.' });
+  }
+});
+
+// Chat Pinning
+
+router.post('/chat/pin/:messageId', requireAdmin, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const msg = await LiveChatMessage.findById(messageId).populate('sender', 'displayName role');
+    if (!msg) return res.status(404).json({ error: 'NOT_FOUND', message: 'Chat message not found.' });
+
+    await PinnedMessage.deleteMany({});
+    await PinnedMessage.create({ message: messageId, pinnedBy: 'Professor' });
+
+    await AdminLog.create({
+      action: 'PIN_MESSAGE',
+      details: `Pinned chat message (ID: ${messageId}) by ${msg.sender?.displayName || 'Unknown'}`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('chat-pinned-message', msg);
+    }
+
+    res.json({ message: 'Message pinned successfully.', pinnedMessage: msg });
+  } catch (error) {
+    console.error('Error pinning message:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to pin message.' });
+  }
+});
+
+router.post('/chat/unpin', requireAdmin, async (req, res) => {
+  try {
+    await PinnedMessage.deleteMany({});
+
+    await AdminLog.create({
+      action: 'UNPIN_MESSAGE',
+      details: 'Unpinned chat message',
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('chat-pinned-message', null);
+    }
+
+    res.json({ message: 'Message unpinned successfully.' });
+  } catch (error) {
+    console.error('Error unpinning message:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to unpin message.' });
+  }
+});
+
+// GET /api/admin/sessions - Admin Login History Logs
+router.get('/sessions', requireAdmin, async (req, res) => {
+  try {
+    const list = await AdminSession.find({}).sort({ loginTime: -1 });
+    res.json(list);
+  } catch (error) {
+    console.error('Error fetching sessions list:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve login session logs.' });
+  }
+});
+
+// GET /api/admin/announcements/history - paginated history logs
+router.get('/announcements/history', requireAdmin, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const filter = req.query.filter || 'all'; // 'all', 'active', 'scheduled', 'expired', 'deleted'
+
+    const match = {};
+    if (search) {
+      match.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { content: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const now = new Date();
+    if (filter === 'deleted') {
+      match.status = 'trash';
+    } else {
+      match.status = 'active';
+      if (filter === 'active') {
+        match.scheduledStart = { $lte: now };
+        match.$or = [
+          { expiresAt: null },
+          { expiresAt: { $gte: now } }
+        ];
+      } else if (filter === 'scheduled') {
+        match.scheduledStart = { $gt: now };
+      } else if (filter === 'expired') {
+        match.expiresAt = { $lt: now };
+      }
+    }
+
+    const totalCount = await Announcement.countDocuments(match);
+    const totalPages = Math.ceil(totalCount / limit);
+
+    const history = await Announcement.find(match)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    res.json({
+      history,
+      pagination: {
+        totalCount,
+        totalPages,
+        currentPage: page,
+        limit
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching announcements history:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch history.' });
+  }
+});
+
+// Announcements CRUD
+
+router.post('/announcement', requireAdmin, async (req, res) => {
+  try {
+    const { title, content, type, scheduledStart, expiresAt, bgColor, textColor } = req.body;
+    if (!title || !content) return res.status(400).json({ error: 'BAD_REQUEST', message: 'Title and Content are required.' });
+
+    const announcement = await Announcement.create({
+      title,
+      content,
+      type: type || 'homepage',
+      scheduledStart: scheduledStart ? new Date(scheduledStart) : new Date(),
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      bgColor: bgColor || '#f3e8ff',
+      textColor: textColor || '#6b21a8',
+      createdBy: 'Professor'
+    });
+
+    await AdminLog.create({
+      action: 'CREATE_ANNOUNCEMENT',
+      details: `Created announcement: "${title}"`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('announcements-updated');
+    }
+
+    res.status(201).json(announcement);
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to create.' });
+  }
+});
+
+router.put('/announcement/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, content, type, scheduledStart, expiresAt, bgColor, textColor, status } = req.body;
+
+    const announcement = await Announcement.findById(id);
+    if (!announcement) return res.status(404).json({ error: 'NOT_FOUND', message: 'Announcement not found.' });
+
+    if (title) announcement.title = title;
+    if (content) announcement.content = content;
+    if (type) announcement.type = type;
+    if (scheduledStart !== undefined) announcement.scheduledStart = scheduledStart ? new Date(scheduledStart) : new Date();
+    if (expiresAt !== undefined) announcement.expiresAt = expiresAt ? new Date(expiresAt) : null;
+    if (bgColor) announcement.bgColor = bgColor;
+    if (textColor) announcement.textColor = textColor;
+    if (status) announcement.status = status;
+
+    await announcement.save();
+
+    await AdminLog.create({
+      action: 'EDIT_ANNOUNCEMENT',
+      details: `Modified announcement: "${announcement.title}"`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('announcements-updated');
+    }
+
+    res.json(announcement);
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to edit.' });
+  }
+});
+
+router.delete('/announcement/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const announcement = await Announcement.findById(id);
+    if (!announcement) return res.status(404).json({ error: 'NOT_FOUND', message: 'Announcement not found.' });
+
+    // Soft delete
+    announcement.status = 'trash';
+    await announcement.save();
+
+    await AdminLog.create({
+      action: 'SOFT_DELETE_ANNOUNCEMENT',
+      details: `Soft-deleted announcement: "${announcement.title}"`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.emit('announcements-updated');
+    }
+
+    res.json({ message: 'Announcement soft deleted.' });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to delete.' });
+  }
+});
+
+// POST /api/admin/backup
+router.post('/backup', requireAdmin, async (req, res) => {
+  try {
+    const result = await runDatabaseBackup();
+    res.json(result);
+  } catch (error) {
+    console.error('Backup trigger error:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Backup execution failed.' });
+  }
+});
+
+// GET /api/admin/backup/status
+router.get('/backup/status', requireAdmin, async (req, res) => {
+  try {
+    const statusSetting = await Settings.findOne({ key: 'last_backup_status' });
+    if (statusSetting) {
+      res.json(statusSetting.value);
+    } else {
+      res.json(null);
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch status.' });
+  }
+});
+
+// POST /api/admin/report/:id/action
 router.post('/report/:id/action', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { action, durationMinutes } = req.body;
+    const { action, durationMinutes, banReason } = req.body;
 
     const report = await Report.findById(id);
     if (!report) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Report not found.' });
     }
 
-    const io = getIo(req);
     let logDetail = '';
+    const io = getIo(req);
 
-    if (action === 'delete_content') {
-      // Delete the reported content item
+    if (action === 'ignore') {
+      report.status = 'resolved';
+      await report.save();
+      logDetail = `Ignored report ${id}`;
+    } else if (action === 'delete_content') {
       if (report.targetType === 'message') {
-        await LiveChatMessage.deleteOne({ _id: report.targetId });
-        if (io) io.emit('chat-message-deleted', report.targetId);
+        await LiveChatMessage.findByIdAndUpdate(report.targetId, { status: 'trash', deletedAt: new Date() });
+        if (io) io.emit('message-deleted', report.targetId);
       } else if (report.targetType === 'confession') {
-        await Confession.deleteOne({ _id: report.targetId });
+        await Confession.findByIdAndUpdate(report.targetId, { status: 'trash', deletedAt: new Date() });
         if (io) io.emit('confession-deleted', report.targetId);
       } else if (report.targetType === 'meme') {
-        const meme = await Meme.findById(report.targetId);
-        if (meme) {
-          const pId = meme.publicId || meme.cloudinaryPublicId;
-          if (pId && isCloudinaryConfigured()) {
-            try {
-              await cloudinary.uploader.destroy(pId);
-            } catch (err) {
-              console.error('Error deleting Cloudinary asset from report action:', err);
-            }
-          }
-          await Meme.deleteOne({ _id: report.targetId });
-        }
+        await Meme.findByIdAndUpdate(report.targetId, { status: 'trash', deletedAt: new Date() });
         if (io) io.emit('meme-deleted', report.targetId);
+      } else if (report.targetType === 'poll') {
+        await Poll.findByIdAndUpdate(report.targetId, { status: 'trash', deletedAt: new Date() });
+        if (io) io.emit('poll-deleted', report.targetId);
       }
       report.status = 'resolved';
       await report.save();
-      logDetail = `Deleted reported ${report.targetType} (ID: ${report.targetId}) and resolved report ${id}`;
-    } else if (action === 'ignore') {
-      report.status = 'resolved';
-      await report.save();
-      logDetail = `Ignored report ${id} for ${report.targetType} (ID: ${report.targetId})`;
+      logDetail = `Soft-deleted reported ${report.targetType} target content and resolved report ${id}`;
     } else if (action === 'ban_user') {
-      // Find target user by reporter/target content
       let targetUserToken = '';
       if (report.targetType === 'message') {
         const msg = await LiveChatMessage.findById(report.targetId);
@@ -1352,12 +1335,21 @@ router.post('/report/:id/action', requireAdmin, async (req, res) => {
           const usr = await User.findById(meme.sender);
           if (usr) targetUserToken = usr.browserToken;
         }
+      } else if (report.targetType === 'poll') {
+        const poll = await Poll.findById(report.targetId);
+        if (poll) {
+          const usr = await User.findById(poll.sender);
+          if (usr) targetUserToken = usr.browserToken;
+        }
       }
 
       if (targetUserToken) {
         const userObj = await User.findOne({ browserToken: targetUserToken });
         if (userObj) {
           userObj.isBanned = true;
+          userObj.banReason = banReason || 'Reported content violation';
+          userObj.bannedBy = 'Professor';
+          userObj.banDate = new Date();
           await userObj.save();
           if (io) {
             io.emit('user-banned-alert', targetUserToken);
@@ -1385,6 +1377,12 @@ router.post('/report/:id/action', requireAdmin, async (req, res) => {
         const meme = await Meme.findById(report.targetId);
         if (meme) {
           const usr = await User.findById(meme.sender);
+          if (usr) targetUserToken = usr.browserToken;
+        }
+      } else if (report.targetType === 'poll') {
+        const poll = await Poll.findById(report.targetId);
+        if (poll) {
+          const usr = await User.findById(poll.sender);
           if (usr) targetUserToken = usr.browserToken;
         }
       }

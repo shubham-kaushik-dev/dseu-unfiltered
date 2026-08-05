@@ -36,7 +36,16 @@ const confessionSchema = new mongoose.Schema({
     of: [String], // Map of Unicode Emoji -> Array of browserTokens
     default: {}
   },
-  comments: [commentSchema]
+  comments: [commentSchema],
+  status: {
+    type: String,
+    enum: ['active', 'trash'],
+    default: 'active'
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: true
 });

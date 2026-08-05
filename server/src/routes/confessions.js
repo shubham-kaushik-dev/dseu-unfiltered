@@ -13,7 +13,7 @@ const getIo = (req) => req.app.get('io');
 // GET /api/confessions - Get all confessions (sorted by newest)
 router.get('/', parseUser, async (req, res) => {
   try {
-    const confessions = await Confession.find({ campus: req.user?.campus || 'DSEU' })
+    const confessions = await Confession.find({ campus: req.user?.campus || 'DSEU', status: { $ne: 'trash' } })
       .populate('sender', 'displayName')
       .populate('comments.sender', 'displayName')
       .sort({ createdAt: -1 });

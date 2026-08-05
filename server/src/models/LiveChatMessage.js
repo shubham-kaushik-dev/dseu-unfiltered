@@ -28,12 +28,36 @@ const liveChatMessageSchema = new mongoose.Schema({
   isEdited: {
     type: Boolean,
     default: false
+  },
+  replyTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LiveChatMessage',
+    default: null
+  },
+  messageType: {
+    type: String,
+    enum: ['normal', 'notice'],
+    default: 'normal'
+  },
+  isShadowBanned: {
+    type: Boolean,
+    default: false
+  },
+  status: {
+    type: String,
+    enum: ['active', 'trash'],
+    default: 'active'
+  },
+  deletedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
 });
 
-// TTL Index: Delete chat messages after 30 days (30 * 24 * 60 * 60 seconds)
+// TTL Index: Delete active chat messages after 30 days
+// We will manage garbage collection of trash ourselves so we keep expireAfterSeconds
 liveChatMessageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2592000 });
 
 export default mongoose.model('LiveChatMessage', liveChatMessageSchema);
