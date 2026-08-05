@@ -113,12 +113,7 @@ router.post('/login', async (req, res) => {
     { expiresIn: '1h' }
   );
 
-  res.cookie('dseu_unfiltered_admin', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 1000 // 1 hour
-  });
+  // Removed res.cookie call to support token-based JWT bearer authentication instead of cookie sessions
 
   await AdminLog.create({
     action: 'ADMIN_LOGIN',
@@ -137,12 +132,17 @@ router.post('/login', async (req, res) => {
     io.emit('online-stealth-update');
   }
 
-  res.json({ message: 'Logged in successfully as administrator.', csrfToken });
+  res.json({ message: 'Logged in successfully as administrator.', token, csrfToken });
 });
 
 // POST /api/admin/logout
 router.post('/logout', async (req, res) => {
-  const token = req.cookies?.dseu_unfiltered_admin;
+  let token = null;
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  }
+
   if (token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
@@ -158,8 +158,6 @@ router.post('/logout', async (req, res) => {
       // ignore token verification failures
     }
   }
-
-  res.clearCookie('dseu_unfiltered_admin');
 
   // Trigger online stealth update
   const io = getIo(req);

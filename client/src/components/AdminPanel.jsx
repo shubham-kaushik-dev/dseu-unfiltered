@@ -13,7 +13,7 @@ import Logo from './Logo';
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export default function AdminPanel({ onAdminStateChange }) {
-  const { user, adminCsrfToken, refreshProfile, setAdminCsrfToken, adminFetch } = useContext(UserContext);
+  const { user, adminCsrfToken, refreshProfile, setAdminCsrfToken, adminJwt, setAdminJwt, adminFetch } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
 
@@ -117,9 +117,16 @@ export default function AdminPanel({ onAdminStateChange }) {
   const [auditLogs, setAuditLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
-  // Auto check and login if cookies are already authenticated on mount
+  // Auto check and login if token is authenticated on mount
   useEffect(() => {
-    fetch(`${API_BASE}/api/admin/check`, { credentials: 'include' })
+    const jwtToken = localStorage.getItem('dseu_admin_jwt') || '';
+    if (!jwtToken) return;
+
+    fetch(`${API_BASE}/api/admin/check`, {
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`
+      }
+    })
       .then(async (res) => {
         if (res.ok) {
           const check = await res.json();
@@ -253,14 +260,14 @@ export default function AdminPanel({ onAdminStateChange }) {
       const res = await fetch(`${API_BASE}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: usernameInput, password: passwordInput }),
-        credentials: 'include'
+        body: JSON.stringify({ username: usernameInput, password: passwordInput })
       });
 
       const data = await res.json();
       if (res.ok) {
         setCsrfToken(data.csrfToken);
         setAdminCsrfToken(data.csrfToken);
+        setAdminJwt(data.token);
         setAdminLoggedIn(true);
         onAdminStateChange(true);
         showToast('Successfully logged in as administrator.', 'success');
@@ -278,12 +285,16 @@ export default function AdminPanel({ onAdminStateChange }) {
 
   const handleLogoutClick = async () => {
     try {
+      const jwtToken = localStorage.getItem('dseu_admin_jwt') || '';
       await fetch(`${API_BASE}/api/admin/logout`, { 
         method: 'POST',
-        credentials: 'include'
+        headers: {
+          'Authorization': `Bearer ${jwtToken}`
+        }
       });
       setAdminCsrfToken('');
       setCsrfToken('');
+      setAdminJwt('');
       setAdminLoggedIn(false);
       onAdminStateChange(false);
       setUsernameInput('');

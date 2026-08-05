@@ -5,17 +5,22 @@ import { generateUniqueIdentity } from '../utils/identity.js';
 
 export async function parseUser(req, res, next) {
   try {
-    // 1. Check if admin cookie is present and valid
+    // 1. Check if admin token is present and valid in Authorization header
     let isAdmin = false;
-    const adminToken = req.cookies?.dseu_unfiltered_admin;
+    let adminToken = null;
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      adminToken = authHeader.substring(7);
+    }
+
     if (adminToken) {
       try {
         const decoded = jwt.verify(adminToken, process.env.JWT_SECRET || 'fallback_secret');
-        if (decoded && decoded.username === (process.env.ADMIN_USERNAME || 'Kaushik')) {
+        if (decoded && decoded.username === (process.env.ADMIN_USERNAME || 'Kaushik') && decoded.role === 'admin') {
           isAdmin = true;
         }
       } catch (err) {
-        // Admin token expired or invalid
+        // Admin token expired or invalid, or not a JWT
       }
     }
 

@@ -13,6 +13,7 @@ export function UserProvider({ children }) {
   const [isMaintenanceActive, setIsMaintenanceActive] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
   const [adminCsrfToken, _setAdminCsrfToken] = useState(() => localStorage.getItem('dseu_admin_csrf_token') || '');
+  const [adminJwt, _setAdminJwt] = useState(() => localStorage.getItem('dseu_admin_jwt') || '');
 
   const setAdminCsrfToken = (token) => {
     _setAdminCsrfToken(token || '');
@@ -23,19 +24,29 @@ export function UserProvider({ children }) {
     }
   };
 
+  const setAdminJwt = (token) => {
+    _setAdminJwt(token || '');
+    if (token) {
+      localStorage.setItem('dseu_admin_jwt', token);
+    } else {
+      localStorage.removeItem('dseu_admin_jwt');
+    }
+  };
+
   const fetchProfile = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('dseu_unfiltered_token');
+      const adminJwtToken = adminJwt || localStorage.getItem('dseu_admin_jwt') || '';
       const headers = {};
       if (token) {
         headers['x-anonymous-token'] = token;
       }
+      if (adminJwtToken) {
+        headers['Authorization'] = `Bearer ${adminJwtToken}`;
+      }
       
-      const response = await fetch(`${API_BASE}/api/auth/me`, { 
-        headers,
-        credentials: 'include'
-      });
+      const response = await fetch(`${API_BASE}/api/auth/me`, { headers });
       
       if (response.status === 503) {
         const errorData = await response.json();
@@ -87,11 +98,16 @@ export function UserProvider({ children }) {
   };
 
   const adminFetch = async (url, options = {}) => {
-    const token = adminCsrfToken || localStorage.getItem('dseu_admin_csrf_token') || '';
+    const csrfToken = adminCsrfToken || localStorage.getItem('dseu_admin_csrf_token') || '';
+    const jwtToken = adminJwt || localStorage.getItem('dseu_admin_jwt') || '';
     const headers = {
       ...options.headers,
-      'x-csrf-token': token
+      'x-csrf-token': csrfToken
     };
+
+    if (jwtToken) {
+      headers['Authorization'] = `Bearer ${jwtToken}`;
+    }
 
     if (options.body && !(options.body instanceof FormData)) {
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
@@ -100,14 +116,14 @@ export function UserProvider({ children }) {
     try {
       const response = await fetch(`${API_BASE}${url}`, {
         ...options,
-        headers,
-        credentials: 'include'
+        headers
       });
 
       if (response.status === 401) {
         const errorData = await response.json().catch(() => ({}));
         if (errorData.error === 'ADMIN_SESSION_EXPIRED' || errorData.error === 'ADMIN_UNAUTHORIZED') {
           setAdminCsrfToken('');
+          setAdminJwt('');
           window.location.href = '/?admin_session_expired=true';
         }
       }
@@ -136,6 +152,8 @@ export function UserProvider({ children }) {
       refreshProfile: fetchProfile,
       adminCsrfToken,
       setAdminCsrfToken,
+      adminJwt,
+      setAdminJwt,
       adminFetch
     }}>
       {children}

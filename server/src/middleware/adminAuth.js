@@ -41,7 +41,11 @@ export function clearFailedAttempts(ip) {
 
 export function requireAdmin(req, res, next) {
   try {
-    const token = req.cookies?.dseu_unfiltered_admin;
+    let token = null;
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
 
     if (!token) {
       return res.status(401).json({ error: 'ADMIN_UNAUTHORIZED', message: 'Unauthorized. Admin session missing.' });
@@ -74,7 +78,6 @@ export function requireAdmin(req, res, next) {
     next();
   } catch (error) {
     console.error('Admin Auth Error:', error);
-    res.clearCookie('dseu_unfiltered_admin');
     return res.status(401).json({ error: 'ADMIN_SESSION_EXPIRED', message: 'Session expired. Please log in again.' });
   }
 }
