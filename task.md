@@ -46,3 +46,7 @@
 - [x] Setup 5x reconnect retry logic with backoff for primary database cluster.
 - [x] Bind HTTP server listen *after* database connections resolve to prevent buffering timeout crashes on startup.
 - [x] Run application dev servers and perform manual/automated testing passes
+- [x] Disable file system writes inside logger (`logger.js`) when deploying to serverless Vercel environments.
+- [x] Bypass local uploads folder creation on server boot (`server.js`) if running on Vercel.
+- [x] Disable local backups folder creation on cron trigger (`backup.js`) if running on Vercel.
+- [x] Add default and named ESM exports for Express `app` and `server` at the bottom of `server.js`.

@@ -14,6 +14,17 @@ import Settings from '../models/Settings.js';
  * and saves status details into Settings database.
  */
 export async function runDatabaseBackup() {
+  if (process.env.VERCEL === '1') {
+    console.log('[Backup] Database backups to disk are disabled in serverless/Vercel environments.');
+    return {
+      timestamp: new Date().toISOString(),
+      status: 'skipped',
+      filesCount: 0,
+      sizeKb: 0,
+      message: 'Backups are disabled in serverless/Vercel environments.'
+    };
+  }
+
   const backupRoot = process.env.BACKUP_PATH || './backups';
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupFolder = path.join(process.cwd(), backupRoot, `backup-${timestamp}`);

@@ -91,8 +91,13 @@ app.use(cookieParser());
 
 // Serve local uploads in development
 const uploadsDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const isVercelEnv = process.env.VERCEL === '1';
+if (!isVercelEnv && !fs.existsSync(uploadsDir)) {
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch (err) {
+    logger.warn('Failed to create uploads directory on boot:', { error: err.message });
+  }
 }
 app.use('/uploads', express.static(uploadsDir));
 
@@ -607,3 +612,6 @@ const gracefulShutdown = (signal) => {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+export { app, server };
+export default app;

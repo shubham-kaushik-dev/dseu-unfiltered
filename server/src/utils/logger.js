@@ -1,12 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 
-const logDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
+const isVercel = process.env.VERCEL === '1';
+
+const logDir = !isVercel ? path.join(process.cwd(), 'logs') : null;
+if (!isVercel && logDir && !fs.existsSync(logDir)) {
+  try {
+    fs.mkdirSync(logDir, { recursive: true });
+  } catch (err) {
+    console.error('Failed to create logs directory:', err.message);
+  }
 }
 
-const logFile = path.join(logDir, 'app.log');
+const logFile = logDir ? path.join(logDir, 'app.log') : null;
 
 function writeLog(level, message, meta = {}) {
   const logEntry = {
@@ -25,11 +31,13 @@ function writeLog(level, message, meta = {}) {
     console.log(logStr);
   }
   
-  // File logging
-  try {
-    fs.appendFileSync(logFile, logStr + '\n');
-  } catch (err) {
-    console.error('Failed to append log to file:', err);
+  // File logging (disabled on Vercel)
+  if (!isVercel && logFile) {
+    try {
+      fs.appendFileSync(logFile, logStr + '\n');
+    } catch (err) {
+      console.error('Failed to append log to file:', err);
+    }
   }
 }
 
