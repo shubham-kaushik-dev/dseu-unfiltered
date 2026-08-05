@@ -50,3 +50,5 @@
 - [x] Bypass local uploads folder creation on server boot (`server.js`) if running on Vercel.
 - [x] Disable local backups folder creation on cron trigger (`backup.js`) if running on Vercel.
 - [x] Add default and named ESM exports for Express `app` and `server` at the bottom of `server.js`.
+- [x] Configure Socket.IO server target endpoint dynamically using `import.meta.env.VITE_API_URL` fallback to localhost.
+- [x] Create `client/.env.example` defining default VITE_API_URL settings for production Vercel servers.

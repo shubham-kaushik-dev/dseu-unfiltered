@@ -13,9 +13,8 @@ export function SocketProvider({ children }) {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Establish connection to backend port (proxied via Vite on localhost)
-    // Note: In production (Render/Vercel), we can connect directly to the current host or empty string
-    const socketInstance = io(window.location.origin === 'http://localhost:3000' ? 'http://localhost:5000' : window.location.origin, {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const socketInstance = io(API_URL, {
       transports: ['websocket'],
       autoConnect: true
     });
