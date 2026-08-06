@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { parseUser } from '../middleware/auth.js';
 import User from '../models/User.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
+import SupportMessage from '../models/SupportMessage.js';
 
 const router = express.Router();
 
@@ -224,6 +225,12 @@ router.post('/reset-request', async (req, res) => {
       return res.status(400).json({ message: 'All fields are required.' });
     }
 
+    // Find the registered user to map the recovery to support conversation
+    const user = await User.findOne({ displayName: username, isRegistered: true });
+    if (!user) {
+      return res.status(404).json({ message: 'Registered user with this anonymous username not found.' });
+    }
+
     await PasswordResetRequest.create({
       username,
       realName,
@@ -231,7 +238,49 @@ router.post('/reset-request', async (req, res) => {
       reason
     });
 
-    res.json({ message: 'Password reset request submitted successfully.' });
+    const msgText = `Password Reset Request
+
+Username: ${username}
+Campus: ${campus}
+Reason: ${reason}
+
+The administrator has been notified.
+Please wait while the administrator verifies your identity.`;
+
+    // Automatically create direct Support Message
+    await SupportMessage.create({
+      browserToken: user.browserToken,
+      senderType: 'user',
+      senderName: user.displayName,
+      text: msgText,
+      isSeen: false
+    });
+
+    const getIo = (r) => r.app.get('io');
+    const io = getIo(req);
+    if (io) {
+      // Notify admin channel
+      io.to('admin').emit('support-message', {
+        browserToken: user.browserToken,
+        senderType: 'user',
+        senderName: user.displayName,
+        text: msgText,
+        createdAt: new Date()
+      });
+      // Notify user's specific room
+      io.to(`support-${user.browserToken}`).emit('support-message', {
+        browserToken: user.browserToken,
+        senderType: 'user',
+        senderName: user.displayName,
+        text: msgText,
+        createdAt: new Date()
+      });
+    }
+
+    res.json({ 
+      message: 'Password reset request submitted successfully.',
+      browserToken: user.browserToken
+    });
   } catch (err) {
     console.error('Reset Request Error:', err);
     res.status(500).json({ message: 'Internal server error submitting request.' });

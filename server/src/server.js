@@ -278,6 +278,8 @@ io.on('connection', async (socket) => {
           return;
         }
 
+        socket.join(`support-${token}`);
+
         activeUsers.set(socket.id, {
           id: user._id,
           displayName: user.displayName,
@@ -485,13 +487,13 @@ io.on('connection', async (socket) => {
     const active = activeUsers.get(socket.id);
     if (!active) return;
 
-    if (active.isBanned) {
-      io.to('admin').emit('support-user-typing', {
-        browserToken: active.browserToken,
+    if (active.role === 'admin') {
+      io.to(`support-${data.token}`).emit('support-admin-typing', {
         isTyping: data.isTyping
       });
     } else {
-      io.to(`support-${data.token}`).emit('support-admin-typing', {
+      io.to('admin').emit('support-user-typing', {
+        browserToken: active.browserToken,
         isTyping: data.isTyping
       });
     }
@@ -501,18 +503,20 @@ io.on('connection', async (socket) => {
     const active = activeUsers.get(socket.id);
     if (!active) return;
 
-    if (active.isBanned) {
+    if (active.role === 'admin') {
+      const token = data?.token;
+      if (!token) return;
+      await SupportMessage.updateMany(
+        { browserToken: token, senderType: 'user', isSeen: false },
+        { $set: { isSeen: true } }
+      );
+      io.to(`support-${token}`).emit('support-messages-seen');
+    } else {
       await SupportMessage.updateMany(
         { browserToken: active.browserToken, senderType: 'admin', isSeen: false },
         { $set: { isSeen: true } }
       );
       io.to('admin').emit('support-messages-seen', { token: active.browserToken });
-    } else {
-      await SupportMessage.updateMany(
-        { browserToken: data.token, senderType: 'user', isSeen: false },
-        { $set: { isSeen: true } }
-      );
-      io.to(`support-${data.token}`).emit('support-messages-seen');
     }
   });
 

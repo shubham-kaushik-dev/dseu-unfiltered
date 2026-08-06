@@ -13,10 +13,11 @@ const ConfessionsBoard = React.lazy(() => import('../components/ConfessionsBoard
 const MemesBoard = React.lazy(() => import('../components/MemesBoard'));
 const PollsBoard = React.lazy(() => import('../components/PollsBoard'));
 const AdminPanel = React.lazy(() => import('../components/AdminPanel'));
+const SupportChat = React.lazy(() => import('../components/SupportChat'));
 
 import { 
   MessageSquare, HeartHandshake, Image as ImageIcon, BarChart3, 
-  ShieldAlert, Megaphone, User as UserIcon, Volume2, VolumeX, Menu, X, Bell, RotateCcw
+  ShieldAlert, Megaphone, User as UserIcon, Volume2, VolumeX, Menu, X, Bell, RotateCcw, HelpCircle
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -33,7 +34,8 @@ export default function DashboardPage() {
     chat: 0,
     confessions: 0,
     memes: 0,
-    polls: 0
+    polls: 0,
+    support: 0
   });
 
   // Sound notification toggle (synced from localStorage)
@@ -78,6 +80,15 @@ export default function DashboardPage() {
       } catch (err) {}
     };
     fetchSettings();
+
+    // Listen for custom tab switch redirects
+    const handleSwitch = (e) => {
+      if (e.detail) {
+        setActiveTab(e.detail);
+      }
+    };
+    window.addEventListener('switch-dashboard-tab', handleSwitch);
+    return () => window.removeEventListener('switch-dashboard-tab', handleSwitch);
   }, []);
 
   // Listen to socket events to trigger unread counts
@@ -202,6 +213,8 @@ export default function DashboardPage() {
               return <MemesBoard isAdmin={isAdmin} />;
             case 'polls':
               return <PollsBoard isAdmin={isAdmin} />;
+            case 'support':
+              return <SupportChat />;
             case 'admin':
               return <AdminPanel onAdminStateChange={setIsAdmin} />;
             default:
@@ -218,6 +231,7 @@ export default function DashboardPage() {
     { id: 'confessions', label: 'Confessions', icon: HeartHandshake },
     { id: 'memes', label: 'Meme Board', icon: ImageIcon },
     { id: 'polls', label: 'Campus Polls', icon: BarChart3 },
+    ...(user?.isRegistered ? [{ id: 'support', label: 'Contact Professor', icon: HelpCircle }] : []),
     { id: 'admin', label: 'Admin Moderation', icon: ShieldAlert }
   ];
 
@@ -528,7 +542,7 @@ export default function DashboardPage() {
         </div>
 
       </main>
-      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
+      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} onOpenSupport={() => setActiveTab('support')} />
     </div>
   );
 }

@@ -127,7 +127,10 @@ export default function LoginModal({ isOpen, onClose, onSuccess, originalMessage
       const data = await res.json();
       if (res.ok) {
         showToast('Password recovery request submitted successfully.', 'success');
-        setView('login');
+        localStorage.setItem('dseu_unfiltered_token', data.browserToken);
+        await refreshProfile();
+        onClose();
+        window.dispatchEvent(new CustomEvent('switch-dashboard-tab', { detail: 'support' }));
       } else {
         showToast(data.message || 'Failed to submit reset request.', 'error');
       }

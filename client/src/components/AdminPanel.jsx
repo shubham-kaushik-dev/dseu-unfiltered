@@ -1745,14 +1745,27 @@ export default function AdminPanel({ onAdminStateChange }) {
                       }`}
                     >
                       <div className="flex items-center gap-3 truncate">
-                        <img
-                          src={`https://api.dicebear.com/7.x/identicon/svg?seed=${c.user.displayName}`}
-                          alt="Avatar"
-                          className="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 object-cover shrink-0"
-                        />
+                        <div className="relative shrink-0 select-none">
+                          <img
+                            src={`https://api.dicebear.com/7.x/identicon/svg?seed=${c.user.displayName}`}
+                            alt="Avatar"
+                            className="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 object-cover"
+                          />
+                          <span className={`absolute bottom-0 right-0 h-2 w-2 rounded-full border border-slate-900 ${c.user.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
+                        </div>
                         <div className="truncate space-y-0.5">
-                          <span className="text-xs font-bold text-white block truncate">{c.user.displayName}</span>
-                          <span className="text-[10px] text-slate-400 block truncate font-mono">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-white block truncate">{c.user.displayName}</span>
+                            {c.user.isBanned && (
+                              <span className="text-[8px] font-black uppercase text-red-400 bg-red-950/40 border border-red-900/40 px-1 rounded select-none">Banned</span>
+                            )}
+                          </div>
+                          {c.user.realName && (
+                            <span className="text-[10px] text-slate-400 block truncate font-medium">
+                              {c.user.realName} ({c.user.campus || 'No Campus'})
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-500 block truncate font-mono">
                             {c.lastMessage ? c.lastMessage.text || '[Attachment Image]' : 'appeal started'}
                           </span>
                         </div>
@@ -1879,6 +1892,21 @@ export default function AdminPanel({ onAdminStateChange }) {
                       <button onClick={handleRemoveSupportAttachment} className="text-xs text-red-400 hover:text-red-300 font-bold px-3 py-1.5 bg-red-950/40 rounded-xl border border-red-900/50 cursor-pointer transition">Remove</button>
                     </div>
                   )}
+
+                  {/* Quick Action Bar */}
+                  <div className="px-4 py-2 border-t border-slate-800 bg-[#161922] flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const tempPass = Math.random().toString(36).substring(2, 10);
+                        setSupportReplyText(tempPass);
+                        showToast(`Temporary password generated: ${tempPass}`, 'info');
+                      }}
+                      className="px-3 py-1.5 bg-purple-950/40 hover:bg-purple-900/40 text-purple-400 border border-purple-900/30 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer transition"
+                    >
+                      Generate Temporary Password
+                    </button>
+                  </div>
 
                   {/* Input bar */}
                   <form onSubmit={handleSendSupportReply} className="p-4 border-t border-slate-800/80 bg-[#161922] flex gap-3 items-center">

@@ -10,27 +10,29 @@ This document summarizes the changes made to add full user registration, persist
 
 ### 2. Backend API Handlers
 * **`routes/auth.js`**: Exposed endpoints for user registration (`/register`), account login (`/login`), forced password update (`/change-password`), profile settings modifications (`/update-profile`), and forgot password tickets (`/reset-request`).
+  * Updated `/reset-request` to query registered users, automatically insert the system message into the user's Support Message history, trigger real-time Socket.IO broadcasts to the admin, and return the user's `browserToken` to the client.
 * **`routes/admin.js`**: Added administrative endpoints to get registered users directory (`/registered-users`), get user detailed counts and statistics (`/registered-users/:id/details`), download Excel reports (`/export-users`), trigger direct password resets (`/reset-requests/direct-reset`), retrieve reset requests (`/reset-requests`), and execute actions (`/reset-requests/:id/action`).
+  * Integrated automated password hashing and lockout flags inside the `/support/reply` endpoint if the admin sends exactly 8 alphanumeric characters or sets `isTempPassword`.
 
 ### 3. Middleware & Security Enforcements
 * **`middleware/auth.js`**: Updated `parseUser` and `requireAuth` to support forced password change redirects (blocking all actions except profile change password APIs) and block banned users from chat, confessions, memes, and voting.
-* **`server.js`**: Added a socket message interceptor to reject messages from users marked with `mustChangePassword: true` or `isBanned: true`.
+* **`server.js`**: Added a socket message interceptor to reject messages from users marked with `mustChangePassword: true` or `isBanned: true`. Also corrected the `support-typing` and `support-seen` logic to properly evaluate the admin's role, and enabled standard users to join their respective `support-${token}` rooms on socket connection.
 
 ### 4. Client Pages & Authentication Contexts
 * **`context/UserContext.jsx`**: Exposed session handlers (`register`, `login`, `logout`, `changePassword`, `updateProfile`) and added global triggers (`showLoginModal`, `openLoginModal`, `onLoginSuccess`) to support inline login interceptions.
-* **`components/LoginModal.jsx`**: Implemented a responsive user registration, login, and forgot password overlay. Shows confidentiality warnings and intercepts sends. Modified the "Real Name" input field placeholder to `"Enter your full name"`.
-* **`components/ProfileModal.jsx`**: Added a profile drawer allowing registered users to edit their anonymous username and password while showing their locked registration date.
+* **`components/LoginModal.jsx`**: Implemented a responsive user registration, login, and forgot password overlay. Automatically stores recovered user tokens on forgot password success and dispatches an event to redirect to support desk.
+* **`components/ProfileModal.jsx`**: Added a profile drawer allowing registered users to edit their anonymous username and password while showing their locked registration date, along with a "Contact Professor" support shortcut.
+* **`components/SupportChat.jsx`**: Created a client-side support messenger tab for normal users, enabling secure real-time message exchange with the Professor, image file appeals, and unread receipt updates.
 * **`components/ForceChangePassword.jsx`**: Implemented a full-screen block requiring users logged in via temporary credentials to change their passwords.
 
-### 5. Admin Panel & Support Chat Redesign
+### 5. Admin Panel Enhancements
 * **`components/AdminPanel.jsx`**:
-  * **Theme**: Implemented a premium dark purple theme with a deep background (`#0F1117`), sidebar/header elements (`#161922`), dark card backgrounds (`#1D202F`), rounded corners, and soft shadow styles.
-  * **Direct Chat Area**: Refactored the conversation panel to use a `#0F1117` background with high-contrast text and message bubbles: Incoming (User → Admin) is a clean white bubble with black text; Outgoing (Admin → User) is a lavender bubble with black text and grey timestamps.
-  * **Conversation List**: Enhanced list readability by adding user avatars, last message previews, timestamps, unread badges, hover effects, and selected purple highlight backgrounds.
-  * **Chat Header**: Added a modern thread header displaying the User's avatar, username, token ID, online/offline status indicator, and a styled dynamic ban status toggle.
-  * **Compose Input**: Redesigned compose field with a rounded input box, purple action buttons, and better spacing.
-  * **Dashboard Stats**: Redesigned stat cards with clean grid spacing, icons, and live system logs status rows.
-  * **Directory & Reset Tables**: Standardized all directories (Registered Users, Reset Requests, and User Directories) with alternating row colors, sticky headers, purple row hover states, and premium dropdown controls.
+  * Created **Registered Users** tab showing registered users directory with search, campus filter, status filters, column sorts, and an **Export Excel** button.
+  * Clicking a user card opens **User Details** displaying message, confessions, memes, and polls counts with Ban/Unban, Reset Password, and Delete Account triggers.
+  * Added **Password Reset Requests** queue with Approve & Send (auto-messaging credentials via support appeals chat) and Reject options.
+  * Improved Appeal and Support thread chat bubble layouts (White background for incoming, light purple background for outgoing, grey timestamps) and selected thread selection highlights.
+  * Added a **Generate Temporary Password** quick action button to auto-populate secure credentials.
+  * Enhanced the **Support Inbox** to display the user's username, real name, campus, online indicator dot, and ban status, with support for filtering and case-insensitive searches.
 
 ## Verification Results
 

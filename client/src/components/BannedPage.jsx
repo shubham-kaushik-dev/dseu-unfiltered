@@ -339,7 +339,7 @@ export default function BannedPage() {
             value={inputText}
             onChange={handleInputChange}
             disabled={uploading}
-            className="flex-1 bg-[#121214] border border-[#1f2833] rounded-xl px-4 py-2.5 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-purple-600 transition"
+            className="flex-1 bg-white border border-zinc-350 rounded-xl px-4 py-2.5 text-xs text-black placeholder-black/60 focus:outline-none focus:border-purple-600 transition"
           />
           
           <button

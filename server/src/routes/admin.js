@@ -882,13 +882,21 @@ router.get('/support/conversations', requireAdmin, async (req, res) => {
     const tokens = await SupportMessage.distinct('browserToken');
 
     const conversationList = [];
+    const onlineTokens = Array.from(activeUsers.values()).map(u => u.browserToken);
 
     for (const token of tokens) {
       const user = await User.findOne({ browserToken: token });
       if (!user) continue;
 
-      if (search && !user.displayName.match(new RegExp(search, 'i')) && !token.match(new RegExp(search, 'i'))) {
-        continue;
+      if (search) {
+        const regex = new RegExp(search, 'i');
+        const matchName = user.displayName && regex.test(user.displayName);
+        const matchReal = user.realName && regex.test(user.realName);
+        const matchCampus = user.campus && regex.test(user.campus);
+        const matchToken = token && regex.test(token);
+        if (!matchName && !matchReal && !matchCampus && !matchToken) {
+          continue;
+        }
       }
 
       const unreadCount = await SupportMessage.countDocuments({ browserToken: token, senderType: 'user', isSeen: false });
@@ -903,10 +911,13 @@ router.get('/support/conversations', requireAdmin, async (req, res) => {
         user: {
           id: user._id,
           displayName: user.displayName,
+          realName: user.realName || '',
+          campus: user.campus || '',
           browserToken: token,
           isBanned: user.isBanned,
           banReason: user.banReason,
-          lastActive: user.lastActive
+          lastActive: user.lastActive,
+          isOnline: onlineTokens.includes(token)
         },
         unreadCount,
         lastMessage: lastMsg
@@ -1010,11 +1021,29 @@ router.post('/support/reply', requireAdmin, (req, res, next) => {
       }
     }
 
+    const trimmedText = text ? text.trim() : '';
+    const userObj = await User.findOne({ browserToken: token });
+    if (userObj && userObj.isRegistered && trimmedText) {
+      const isTempPassword = /^[a-zA-Z0-9]{8}$/.test(trimmedText) || req.body.isTempPassword === 'true';
+      if (isTempPassword) {
+        const hash = await bcrypt.hash(trimmedText, 10);
+        userObj.passwordHash = hash;
+        userObj.mustChangePassword = true;
+        await userObj.save();
+
+        // Also mark pending reset requests as completed
+        await PasswordResetRequest.updateMany(
+          { username: userObj.displayName, status: 'pending' },
+          { $set: { status: 'completed' } }
+        );
+      }
+    }
+
     const message = await SupportMessage.create({
       browserToken: token,
       senderType: 'admin',
       senderName: 'Professor (ADMIN)',
-      text: text ? text.trim() : '',
+      text: trimmedText,
       imageUrl: imageUrl,
       isSeen: false
     });

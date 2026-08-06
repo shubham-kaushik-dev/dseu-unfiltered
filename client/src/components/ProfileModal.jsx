@@ -4,7 +4,7 @@ import { ToastContext } from '../context/ToastContext';
 import Logo from './Logo';
 import { Lock, KeyRound, Eye, EyeOff, Calendar } from 'lucide-react';
 
-export default function ProfileModal({ isOpen, onClose }) {
+export default function ProfileModal({ isOpen, onClose, onOpenSupport }) {
   const { user, refreshProfile } = useContext(UserContext);
   const { showToast } = useContext(ToastContext);
   const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -139,13 +139,28 @@ export default function ProfileModal({ isOpen, onClose }) {
 
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-gradient-to-r from-purple-650 to-blue-600 hover:from-purple-550 hover:to-blue-500 text-white text-sm font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-purple-600/10 cursor-pointer transition transform active:scale-98 disabled:opacity-50"
-          >
-            {loading ? 'Saving Settings...' : 'Update Settings'}
-          </button>
+          <div className="flex flex-col gap-2.5">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 bg-gradient-to-r from-purple-650 to-blue-600 hover:from-purple-550 hover:to-blue-500 text-white text-sm font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-purple-600/10 cursor-pointer transition transform active:scale-98 disabled:opacity-50"
+            >
+              {loading ? 'Saving Settings...' : 'Update Settings'}
+            </button>
+
+            {onOpenSupport && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenSupport();
+                }}
+                className="w-full py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold uppercase tracking-wider rounded-xl border border-purple-100 cursor-pointer transition text-center"
+              >
+                Contact Professor / Message Admin
+              </button>
+            )}
+          </div>
         </form>
 
       </div>
