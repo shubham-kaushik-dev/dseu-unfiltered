@@ -13,14 +13,20 @@ export async function parseUser(req, res, next) {
       adminToken = authHeader.substring(7);
     }
 
+    let adminUsernameFromToken = null;
+
     if (adminToken) {
       try {
-        const superAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
-        const subAdminUsername = 'admin123';
+        const decoded = jwt.verify(adminToken, process.env.JWT_SECRET || 'fallback_secret');
+        const superAdminUsername = 'Professor';
+        const envAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
+        const subAdminUsername = 'berlin';
+        
         if (decoded && 
-            (decoded.username === superAdminUsername || decoded.username === subAdminUsername) && 
+            (decoded.username === superAdminUsername || decoded.username === envAdminUsername || decoded.username === subAdminUsername) && 
             (decoded.role === 'super_admin' || decoded.role === 'sub_admin')) {
           isAdmin = true;
+          adminUsernameFromToken = decoded.username;
         }
       } catch (err) {
         // Admin token expired or invalid, or not a JWT
@@ -31,18 +37,31 @@ export async function parseUser(req, res, next) {
 
     if (isAdmin) {
       // Find or create the permanent admin user
-      user = await User.findOne({ role: 'admin' });
-      if (!user) {
-        user = await User.create({
-          browserToken: 'admin-token-fixed-value-2026',
-          displayName: 'Professor (ADMIN)',
-          role: 'admin',
-          isRegistered: true,
-          campus: 'DSEU'
-        });
-      } else if (!user.isRegistered) {
-        user.isRegistered = true;
-        await user.save();
+      if (adminUsernameFromToken === 'berlin') {
+        user = await User.findOne({ displayName: 'Berlin' });
+        if (!user) {
+          user = await User.create({
+            browserToken: 'admin-token-fixed-value-berlin-2026',
+            displayName: 'Berlin',
+            role: 'admin',
+            isRegistered: true,
+            campus: 'DSEU'
+          });
+        }
+      } else {
+        user = await User.findOne({ role: 'admin', displayName: { $ne: 'Berlin' } });
+        if (!user) {
+          user = await User.create({
+            browserToken: 'admin-token-fixed-value-2026',
+            displayName: 'Professor (ADMIN)',
+            role: 'admin',
+            isRegistered: true,
+            campus: 'DSEU'
+          });
+        } else if (!user.isRegistered) {
+          user.isRegistered = true;
+          await user.save();
+        }
       }
     } else {
       // 2. Extract standard token from custom header, standard auth header, or cookie

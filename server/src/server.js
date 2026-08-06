@@ -490,7 +490,8 @@ io.on('connection', async (socket) => {
 
     if (active.role === 'admin') {
       io.to(`support-${data.token}`).emit('support-admin-typing', {
-        isTyping: data.isTyping
+        isTyping: data.isTyping,
+        adminName: active.displayName === 'Berlin' ? 'Berlin' : 'Professor'
       });
     } else {
       io.to('admin').emit('support-user-typing', {

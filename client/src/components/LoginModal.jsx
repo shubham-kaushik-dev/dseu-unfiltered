@@ -121,6 +121,14 @@ export default function LoginModal({ isOpen, onClose, onSuccess, originalMessage
 
       const data = await res.json();
       if (res.ok) {
+        if (data.isAdmin) {
+          localStorage.setItem('dseu_admin_jwt', data.token);
+          localStorage.setItem('dseu_admin_role', data.role);
+          localStorage.setItem('dseu_unfiltered_token', data.token);
+          showToast('Welcome back, Admin.', 'success');
+          window.location.reload();
+          return;
+        }
         localStorage.setItem('dseu_unfiltered_token', data.token);
         showToast('Login successful.', 'success');
         await refreshProfile();

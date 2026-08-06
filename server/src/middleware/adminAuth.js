@@ -54,11 +54,13 @@ export function requireAdmin(req, res, next) {
     // Verify JWT
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
     
-    // Check if the decoded payload username matches either super_admin or sub_admin
-    const superAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
-    const subAdminUsername = 'admin123';
+    const superAdminUsername = 'Professor';
+    const envAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
+    const subAdminUsername = 'berlin';
     
-    if (decoded.username !== superAdminUsername && decoded.username !== subAdminUsername) {
+    if (decoded.username !== superAdminUsername && 
+        decoded.username !== envAdminUsername && 
+        decoded.username !== subAdminUsername) {
       return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'Invalid admin credentials.' });
     }
 

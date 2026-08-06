@@ -3,6 +3,7 @@ import { UserContext } from '../context/UserContext';
 import { SocketContext } from '../context/SocketContext';
 import Logo from '../components/Logo';
 import professorAvatar from '../assets/professor-avatar.png';
+import berlinAvatar from '../assets/images/admins/berlin.jpg';
 import ProfileModal from '../components/ProfileModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -23,6 +24,10 @@ import {
 export default function DashboardPage({ onOpenRules }) {
   const { user, isBanned, openLoginModal, logout } = useContext(UserContext);
   const { socket, onlineCount, pinnedAnnouncement, setPinnedAnnouncement } = useContext(SocketContext);
+  const isUserAdmin = user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' || user?.displayName === 'Berlin';
+  const adminDisplayName = user?.displayName || '';
+  const isBerlin = adminDisplayName === 'Berlin' || adminDisplayName.toLowerCase().includes('berlin');
+  const userAvatar = isUserAdmin ? (isBerlin ? berlinAvatar : professorAvatar) : null;
   
   const [activeTab, setActiveTab] = useState('chat');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -305,9 +310,9 @@ export default function DashboardPage({ onOpenRules }) {
         <div className="p-5 bg-white border-t border-slate-200/65 flex flex-col gap-3 shadow-[0_-2px_10px_rgba(148,163,184,0.02)]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 overflow-hidden">
-              {user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' ? (
+              {isUserAdmin ? (
                 <img 
-                  src={professorAvatar} 
+                  src={userAvatar} 
                   alt="Admin Avatar" 
                   className="h-12 w-12 rounded-full border border-slate-200 bg-slate-50 object-cover shrink-0" 
                 />
@@ -317,10 +322,18 @@ export default function DashboardPage({ onOpenRules }) {
                 </div>
               )}
               <div className="flex flex-col leading-none overflow-hidden">
-                <span className="text-[14px] font-black text-slate-800 truncate">{user?.displayName}</span>
-                <span className="text-[9px] text-slate-400 font-bold tracking-wider mt-1.5 uppercase">
-                  {(user?.isRegistered || user?.role === 'admin') ? 'Registered User' : 'Visitor ID'}
+                <span className="text-[14px] font-black text-slate-800 truncate">
+                  {isUserAdmin ? (isBerlin ? 'Berlin' : 'Professor') : (user?.displayName || 'Anonymous')}
                 </span>
+                {isUserAdmin ? (
+                  <span className="text-[9px] font-black bg-gradient-to-r from-purple-650 to-amber-600 bg-clip-text text-transparent px-1.5 py-0.5 border border-purple-500/30 rounded uppercase tracking-wider mt-1.5 inline-block self-start font-mono select-none">
+                    {isBerlin ? 'SUB ADMIN' : 'ADMIN'}
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-slate-400 font-bold tracking-wider mt-1.5 uppercase">
+                    {user?.isRegistered ? 'Registered User' : 'Visitor ID'}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -422,9 +435,9 @@ export default function DashboardPage({ onOpenRules }) {
 
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' ? (
+              {isUserAdmin ? (
                 <img 
-                  src={professorAvatar} 
+                  src={userAvatar} 
                   alt="Admin Avatar" 
                   className="h-12 w-12 rounded-full border border-slate-200 bg-slate-50 object-cover shrink-0" 
                 />
@@ -432,8 +445,18 @@ export default function DashboardPage({ onOpenRules }) {
                 <UserIcon className="h-4 w-4 text-purple-600" />
               )}
               <div className="flex flex-col text-xs leading-none">
-                <span className="font-extrabold text-slate-800">{user?.displayName}</span>
-                <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Campus Student</span>
+                <span className="font-extrabold text-slate-800">
+                  {isUserAdmin ? (isBerlin ? 'Berlin' : 'Professor') : (user?.displayName || 'Anonymous')}
+                </span>
+                {isUserAdmin ? (
+                  <span className="text-[9px] font-black bg-gradient-to-r from-purple-650 to-amber-600 bg-clip-text text-transparent px-1.5 py-0.2 border border-purple-500/30 rounded uppercase tracking-wider mt-1.5 inline-block self-start font-mono select-none">
+                    {isBerlin ? 'SUB ADMIN' : 'ADMIN'}
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
+                    {user?.isRegistered ? 'Registered User' : 'Campus Student'}
+                  </span>
+                )}
               </div>
             </div>
             <button

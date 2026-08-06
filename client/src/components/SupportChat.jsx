@@ -17,6 +17,7 @@ export default function SupportChat() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [adminTyping, setAdminTyping] = useState(false);
+  const [typingAdminName, setTypingAdminName] = useState('Professor');
   const [adminOnline, setAdminOnline] = useState(false);
 
   const messagesEndRef = useRef(null);
@@ -58,6 +59,11 @@ export default function SupportChat() {
       // Listen for admin typing indicators
       socket.on('support-admin-typing', (data) => {
         setAdminTyping(data.isTyping);
+        if (data.adminName) {
+          setTypingAdminName(data.adminName);
+        } else {
+          setTypingAdminName('Professor');
+        }
       });
 
       // Listen for seen receipts
@@ -249,7 +255,7 @@ export default function SupportChat() {
               <span className="h-1.5 w-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></span>
               <span className="h-1.5 w-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></span>
             </div>
-            <span className="text-[10px] font-bold uppercase tracking-wider">Professor is typing...</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{typingAdminName} is typing...</span>
           </div>
         )}
         <div ref={messagesEndRef} />

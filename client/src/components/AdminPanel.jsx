@@ -9,6 +9,8 @@ import {
   ArrowLeft, ArrowRight, Eye, ShieldAlert as StealthIcon, RefreshCw, Pin, KeyRound
 } from 'lucide-react';
 import Logo from './Logo';
+import professorAvatar from '../assets/professor-avatar.png';
+import berlinAvatar from '../assets/images/admins/berlin.jpg';
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -1154,12 +1156,25 @@ export default function AdminPanel({ onAdminStateChange }) {
           <Logo size="sm" showText={false} className="h-9 w-9" />
           <div>
             <h1 className="text-md font-black tracking-tight text-white uppercase leading-none">
-              Professor Moderation Terminal
+              {adminRole === 'sub_admin' ? 'Berlin' : 'Professor'} Moderation Terminal
             </h1>
             <span className="text-[10px] font-mono text-purple-400 uppercase tracking-widest block mt-0.5">DSEU Unfiltered Oversight</span>
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <img 
+              src={adminRole === 'sub_admin' ? berlinAvatar : professorAvatar} 
+              alt="Avatar" 
+              className="h-8 w-8 rounded-full border border-slate-700 bg-[#0F1117] object-cover shrink-0" 
+            />
+            <div className="flex flex-col leading-none">
+              <span className="text-xs font-black text-white">{adminRole === 'sub_admin' ? 'Berlin' : 'Professor'}</span>
+              <span className="text-[8px] font-black bg-gradient-to-r from-purple-500 to-amber-500 bg-clip-text text-transparent px-1.5 py-0.5 border border-purple-500/20 rounded uppercase tracking-wider mt-0.5 select-none font-mono">
+                {adminRole === 'sub_admin' ? 'SUB ADMIN' : 'ADMIN'}
+              </span>
+            </div>
+          </div>
           <button 
             onClick={handleLogoutClick} 
             className="px-4 py-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 hover:text-red-300 text-xs font-bold uppercase rounded-xl border border-red-900/50 cursor-pointer transition shadow-md shadow-red-950/5"

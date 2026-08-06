@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { UserContext } from '../context/UserContext';
 import { MessageSquare, Smile, Flag, CornerDownRight, Trash2, Download } from 'lucide-react';
 import professorAvatar from '../assets/professor-avatar.png';
+import berlinAvatar from '../assets/images/admins/berlin.jpg';
 
 const POPULAR_EMOJIS = ['😂', '🔥', '❤️', '💀', '🤡', '😭', '😮', '💯', '👍'];
 
@@ -182,17 +183,52 @@ export default function MemeCard({ meme, onReact, onAddComment, onReport, isAdmi
                   <CornerDownRight className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <img 
-                        src={comment.sender?.role === 'admin' || comment.sender?.isAdmin === true || comment.sender?.displayName === 'Professor (ADMIN)' 
-                          ? professorAvatar
-                          : `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(comment.sender?.browserToken || comment.sender?.displayName || 'default')}`
-                        } 
+                       <img 
+                        src={(() => {
+                          const sender = comment.sender;
+                          if (!sender) return '';
+                          if (sender.role === 'admin' || sender.isAdmin === true || sender.displayName === 'Professor (ADMIN)' || sender.displayName === 'Berlin') {
+                            if (sender.displayName === 'Berlin' || sender.displayName?.toLowerCase().includes('berlin')) {
+                              return berlinAvatar;
+                            }
+                            return professorAvatar;
+                          }
+                          return `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(sender.browserToken || sender.displayName || 'default')}`;
+                        })()}
                         alt="Commenter Avatar" 
                         className="h-6 w-6 rounded-full border border-slate-200 bg-slate-50 object-cover" 
                       />
-                      <span className="font-extrabold text-blue-605">
-                        {comment.sender?.displayName || 'Anonymous'}
-                      </span>
+                      {(() => {
+                        const name = comment.sender?.displayName || '';
+                        const isAdminUser = comment.sender?.role === 'admin' || comment.sender?.isAdmin === true || name === 'Professor (ADMIN)' || name === 'Berlin';
+                        if (isAdminUser) {
+                          if (name === 'Berlin' || name.toLowerCase().includes('berlin')) {
+                            return (
+                              <div className="flex items-center gap-1">
+                                <span className="font-extrabold text-purple-750">Berlin</span>
+                                <span className="text-[8px] font-black bg-gradient-to-r from-purple-600 to-amber-600 bg-clip-text text-transparent px-1 py-0.1 border border-purple-500/30 rounded uppercase tracking-wider font-mono">
+                                  SUB ADMIN
+                                </span>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="flex items-center gap-1">
+                                <span className="font-extrabold text-purple-750">Professor</span>
+                                <span className="text-[8px] font-black bg-gradient-to-r from-purple-600 to-amber-600 bg-clip-text text-transparent px-1 py-0.1 border border-purple-500/30 rounded uppercase tracking-wider font-mono">
+                                  ADMIN
+                                </span>
+                              </div>
+                            );
+                          }
+                        } else {
+                          return (
+                            <span className="font-extrabold text-blue-605">
+                              {name || 'Anonymous'}
+                            </span>
+                          );
+                        }
+                      })()}
                       <span className="text-[9px] text-slate-400 font-semibold">
                         {new Date(comment.createdAt).toLocaleDateString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>

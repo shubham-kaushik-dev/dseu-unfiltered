@@ -33,12 +33,20 @@ import { generateUniqueIdentity } from '../utils/identity.js';
 const router = express.Router();
 const getIo = (req) => req.app.get('io');
 
+const getAdminSenderName = (req) => {
+  if (req && req.admin && req.admin.username === 'berlin') {
+    return 'Berlin (SUB ADMIN)';
+  }
+  return 'Professor (ADMIN)';
+};
+
 const sendSystemSupportMessage = async (browserToken, text, req) => {
   try {
+    const senderName = getAdminSenderName(req);
     await SupportMessage.create({
       browserToken,
       senderType: 'admin',
-      senderName: 'Professor (ADMIN)',
+      senderName,
       text,
       isSeen: false
     });
@@ -47,7 +55,7 @@ const sendSystemSupportMessage = async (browserToken, text, req) => {
       io.to(`support-${browserToken}`).emit('support-message', {
         browserToken,
         senderType: 'admin',
-        senderName: 'Professor (ADMIN)',
+        senderName,
         text,
         createdAt: new Date()
       });
@@ -132,8 +140,8 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'INVALID_INPUT', message: 'Username and password are required.' });
   }
 
-  const isSuperAdmin = username === adminUsername;
-  const isSubAdmin = username === 'admin123';
+  const isSuperAdmin = username === 'Professor' || username === adminUsername;
+  const isSubAdmin = username === 'berlin';
   const usernameMatch = isSuperAdmin || isSubAdmin;
   let passwordMatch = false;
 
@@ -1233,7 +1241,7 @@ router.post('/support/reply', requireAdmin, (req, res, next) => {
     const message = await SupportMessage.create({
       browserToken: token,
       senderType: 'admin',
-      senderName: 'Professor (ADMIN)',
+      senderName: getAdminSenderName(req),
       text: trimmedText,
       imageUrl: imageUrl,
       isSeen: false
@@ -1787,13 +1795,30 @@ router.get('/banned-users', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/admin/registered-users/:id/details
-router.get('/registered-users/:id/details', requireAdmin, requireSuperAdmin, async (req, res) => {
+router.get('/registered-users/:id/details', requireAdmin, async (req, res) => {
   try {
     const userId = req.params.id;
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
+    }
+
+    // Redact private fields if Berlin / sub-admin
+    if (req.admin.role === 'sub_admin') {
+      user.realName = '[REDACTED]';
+      user.campus = '[REDACTED]';
+      user.browserToken = '[REDACTED]';
+      user.ip = '[REDACTED]';
+      user.browser = '[REDACTED]';
+      if (user.registrationDate) {
+        user.registrationDate = null;
+      }
+      if (user.lastLogin) {
+        user.lastLogin = null;
+      }
+      if (user.lastSeen) {
+        user.lastSeen = null;
+      }
     }
 
     const warningCount = user.warnings ? user.warnings.length : 0;
@@ -1917,10 +1942,11 @@ router.post('/reset-requests/direct-reset', requireAdmin, async (req, res) => {
 
     const messageText = `Identity verified.\n\nTemporary Password:\n\n${tempPassword}\n\nPlease login using this password.\n\nYou must change your password immediately after logging in.`;
     
+    const senderName = getAdminSenderName(req);
     await SupportMessage.create({
       browserToken: user.browserToken,
       senderType: 'admin',
-      senderName: 'Professor (ADMIN)',
+      senderName,
       text: messageText,
       isSeen: false
     });
@@ -1930,7 +1956,7 @@ router.post('/reset-requests/direct-reset', requireAdmin, async (req, res) => {
       io.to(`support-${user.browserToken}`).emit('support-message', {
         browserToken: user.browserToken,
         senderType: 'admin',
-        senderName: 'Professor (ADMIN)',
+        senderName,
         text: messageText,
         createdAt: new Date()
       });
@@ -1977,10 +2003,11 @@ router.post('/reset-requests/:id/action', requireAdmin, async (req, res) => {
 
       const messageText = `Identity verified.\n\nTemporary Password:\n\n${tempPassword}\n\nPlease login using this password.\n\nYou must change your password immediately after logging in.`;
       
+      const senderName = getAdminSenderName(req);
       await SupportMessage.create({
         browserToken: user.browserToken,
         senderType: 'admin',
-        senderName: 'Professor (ADMIN)',
+        senderName,
         text: messageText,
         isSeen: false
       });
@@ -1990,7 +2017,7 @@ router.post('/reset-requests/:id/action', requireAdmin, async (req, res) => {
         io.to(`support-${user.browserToken}`).emit('support-message', {
           browserToken: user.browserToken,
           senderType: 'admin',
-          senderName: 'Professor (ADMIN)',
+          senderName,
           text: messageText,
           createdAt: new Date()
         });

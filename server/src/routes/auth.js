@@ -54,6 +54,11 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
     }
 
+    const isReserved = displayName.toLowerCase() === 'professor' || displayName.toLowerCase() === 'berlin' || displayName.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
+    if (isReserved) {
+      return res.status(400).json({ message: 'Anonymous Username is reserved for administrators.' });
+    }
+
     // Username uniqueness validation
     const existing = await User.findOne({ displayName: { $regex: new RegExp(`^${displayName}$`, 'i') } });
     if (existing && (!browserToken || existing.browserToken !== browserToken)) {
@@ -136,6 +141,81 @@ router.post('/login', async (req, res) => {
 
     if (!username || !password) {
       return res.status(400).json({ message: 'Username and password are required.' });
+    }
+
+    const isSuperAdmin = username.toLowerCase() === 'professor' || username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
+    const isSubAdmin = username.toLowerCase() === 'berlin';
+
+    if (isSuperAdmin || isSubAdmin) {
+      const adminPasswordRaw = process.env.ADMIN_PASSWORD || 'Ananya2608';
+      let passwordMatch = false;
+      if (isSuperAdmin) {
+        passwordMatch = password === adminPasswordRaw;
+      } else {
+        passwordMatch = password === 'Kaushik2608';
+      }
+
+      if (!passwordMatch) {
+        return res.status(401).json({ message: 'Invalid administrator credentials.' });
+      }
+
+      // Find or create admin session & user
+      let dbUser;
+      if (isSubAdmin) {
+        dbUser = await User.findOne({ displayName: 'Berlin' });
+        if (!dbUser) {
+          dbUser = await User.create({
+            browserToken: 'admin-token-fixed-value-berlin-2026',
+            displayName: 'Berlin',
+            role: 'admin',
+            isRegistered: true,
+            campus: 'DSEU'
+          });
+        }
+      } else {
+        dbUser = await User.findOne({ role: 'admin', displayName: { $ne: 'Berlin' } });
+        if (!dbUser) {
+          dbUser = await User.create({
+            browserToken: 'admin-token-fixed-value-2026',
+            displayName: 'Professor (ADMIN)',
+            role: 'admin',
+            isRegistered: true,
+            campus: 'DSEU'
+          });
+        }
+      }
+
+      const csrfToken = crypto.randomUUID();
+      const roleStr = isSuperAdmin ? 'super_admin' : 'sub_admin';
+      const adminJwt = jwt.sign(
+        { username: isSuperAdmin ? 'Professor' : 'berlin', role: roleStr, csrfToken },
+        process.env.JWT_SECRET || 'fallback_secret',
+        { expiresIn: '24h' }
+      );
+
+      res.cookie('dseu_unfiltered_token', dbUser.browserToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 365 * 24 * 60 * 60 * 1000 // 1 year
+      });
+
+      return res.json({
+        token: adminJwt,
+        role: roleStr,
+        csrfToken,
+        isAdmin: true,
+        user: {
+          id: dbUser._id,
+          displayName: dbUser.displayName,
+          browserToken: dbUser.browserToken,
+          campus: dbUser.campus,
+          role: dbUser.role,
+          isRegistered: dbUser.isRegistered,
+          mustChangePassword: dbUser.mustChangePassword,
+          rulesAcceptedVersion: dbUser.rulesAcceptedVersion
+        }
+      });
     }
 
     const user = await User.findOne({ displayName: { $regex: new RegExp(`^${username}$`, 'i') } });

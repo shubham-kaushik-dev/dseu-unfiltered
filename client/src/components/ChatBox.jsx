@@ -4,6 +4,7 @@ import { SocketContext } from '../context/SocketContext';
 import { ToastContext } from '../context/ToastContext';
 import { playNotificationChime } from '../utils/sound';
 import professorAvatar from '../assets/professor-avatar.png';
+import berlinAvatar from '../assets/images/admins/berlin.jpg';
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 import { 
@@ -54,7 +55,11 @@ export default function ChatBox({ isAdmin, adminToken }) {
 
   const getAvatarUrl = (userObj) => {
     if (!userObj) return '';
-    if (userObj.role === 'admin' || userObj.isAdmin === true || userObj.displayName === 'Professor (ADMIN)') {
+    if (userObj.role === 'admin' || userObj.isAdmin === true || userObj.displayName === 'Professor (ADMIN)' || userObj.displayName === 'Berlin') {
+      const name = userObj.displayName || '';
+      if (name === 'Berlin' || name.toLowerCase().includes('berlin')) {
+        return berlinAvatar;
+      }
       return professorAvatar;
     }
     return `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(userObj.browserToken || userObj._id || 'default')}`;
@@ -454,10 +459,28 @@ export default function ChatBox({ isAdmin, adminToken }) {
                   
                   {isSenderAdmin ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[17px] font-black text-purple-700 tracking-tight">Professor</span>
-                      <span className="text-[10px] font-black bg-gradient-to-r from-purple-600 to-amber-600 bg-clip-text text-transparent px-1.5 py-0.2 border border-purple-500/30 rounded uppercase tracking-wider">
-                        ADMIN
-                      </span>
+                      {(() => {
+                        const name = msg.sender?.displayName || '';
+                        if (name === 'Berlin' || name.toLowerCase().includes('berlin')) {
+                          return (
+                            <>
+                              <span className="text-[17px] font-black text-purple-700 tracking-tight">Berlin</span>
+                              <span className="text-[10px] font-black bg-gradient-to-r from-purple-600 to-amber-600 bg-clip-text text-transparent px-1.5 py-0.2 border border-purple-500/30 rounded uppercase tracking-wider">
+                                SUB ADMIN
+                              </span>
+                            </>
+                          );
+                        } else {
+                          return (
+                            <>
+                              <span className="text-[17px] font-black text-purple-700 tracking-tight">Professor</span>
+                              <span className="text-[10px] font-black bg-gradient-to-r from-purple-600 to-amber-600 bg-clip-text text-transparent px-1.5 py-0.2 border border-purple-500/30 rounded uppercase tracking-wider">
+                                ADMIN
+                              </span>
+                            </>
+                          );
+                        }
+                      })()}
                     </div>
                   ) : (
                     <span className={`text-[16px] font-bold tracking-tight ${isMe ? 'text-purple-650' : 'text-blue-600'}`}>
