@@ -2,6 +2,22 @@ import React, { createContext, useState, useEffect } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
+// Override window.fetch globally to automatically include anonymous token fallback
+const originalFetch = window.fetch;
+window.fetch = async function (url, options = {}) {
+  const token = localStorage.getItem('dseu_unfiltered_token');
+  const headers = { ...options.headers };
+
+  if (token && !headers['x-anonymous-token']) {
+    headers['x-anonymous-token'] = token;
+  }
+
+  return originalFetch(url, {
+    ...options,
+    headers
+  });
+};
+
 export const UserContext = createContext();
 
 export function UserProvider({ children }) {

@@ -15,7 +15,7 @@ const AdminPanel = React.lazy(() => import('../components/AdminPanel'));
 
 import { 
   MessageSquare, HeartHandshake, Image as ImageIcon, BarChart3, 
-  ShieldAlert, Megaphone, User as UserIcon, Volume2, VolumeX, Menu, X, Bell 
+  ShieldAlert, Megaphone, User as UserIcon, Volume2, VolumeX, Menu, X, Bell, RotateCcw
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -171,6 +171,15 @@ export default function DashboardPage() {
     const newVal = !soundEnabled;
     setSoundEnabled(newVal);
     localStorage.setItem('dseu_sound_enabled', String(newVal));
+  };
+
+  const handleResetIdentity = () => {
+    if (window.confirm("Are you sure you want to reset your anonymous identity? This will generate a completely new anonymous username.")) {
+      localStorage.removeItem('dseu_unfiltered_token');
+      // Also clear token cookies from browser if possible
+      document.cookie = "dseu_unfiltered_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      window.location.reload();
+    }
   };
 
   const renderActiveComponent = () => {
@@ -391,9 +400,20 @@ export default function DashboardPage() {
           <div className="flex items-center gap-4">
             <div className="flex flex-col leading-none">
               <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">IDENTITY ESTABLISHED</span>
-              <span className="text-[16px] font-bold text-slate-800 flex items-center gap-1.5 mt-1">
-                🐼 {user?.displayName}
-              </span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[16px] font-bold text-slate-800 flex items-center gap-1.5">
+                  🐼 {user?.displayName}
+                </span>
+                {!(user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)') && (
+                  <button
+                    onClick={handleResetIdentity}
+                    className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded transition cursor-pointer"
+                    title="Reset Identity"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 animate-spin-once" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="h-5 w-px bg-slate-200"></div>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold animate-pulse">

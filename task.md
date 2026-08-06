@@ -58,3 +58,6 @@
 - [x] Migrate admin authentication mechanism from cookies to token-based JWT Bearer headers.
 - [x] Setup frontend token persistence storage inside localStorage under `dseu_admin_jwt`.
 - [x] Remove admin session cookie setups (`res.cookie`) and clearances (`res.clearCookie`) from server-side configurations.
+- [x] Configure global `window.fetch` interceptor on frontend to automatically send `x-anonymous-token` header.
+- [x] Prioritize `x-anonymous-token` header over cookies on the backend inside `parseUser` middleware.
+- [x] Implement UI "Reset Identity" button next to student name in dashboard header for manual resets.

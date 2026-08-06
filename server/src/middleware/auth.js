@@ -38,8 +38,8 @@ export async function parseUser(req, res, next) {
         });
       }
     } else {
-      // 2. Extract standard token from cookie, header, or custom header
-      let token = req.cookies?.dseu_unfiltered_token;
+      // 2. Extract standard token from custom header, standard auth header, or cookie
+      let token = req.headers['x-anonymous-token'];
 
       if (!token && req.headers['authorization']) {
         const authHeader = req.headers['authorization'];
@@ -49,7 +49,7 @@ export async function parseUser(req, res, next) {
       }
 
       if (!token) {
-        token = req.headers['x-anonymous-token'];
+        token = req.cookies?.dseu_unfiltered_token;
       }
 
       if (token) {
