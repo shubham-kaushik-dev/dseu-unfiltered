@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
+import xlsx from 'xlsx';
 import { 
   requireAdmin, 
   checkLoginLockout, 
@@ -18,6 +19,7 @@ import Meme from '../models/Meme.js';
 import Poll from '../models/Poll.js';
 import Report from '../models/Report.js';
 import AdminLog from '../models/AdminLog.js';
+import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import Settings from '../models/Settings.js';
 import PinnedMessage from '../models/PinnedMessage.js';
 import SupportMessage from '../models/SupportMessage.js';
@@ -1422,6 +1424,279 @@ router.post('/report/:id/action', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error acting on report:', error);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to act on report.' });
+  }
+});
+
+// GET /api/admin/registered-users
+router.get('/registered-users', requireAdmin, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const campusFilter = req.query.campusFilter || '';
+    const banFilter = req.query.banFilter || '';
+    const sortBy = req.query.sortBy || 'registrationDate';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+
+    const query = { isRegistered: true };
+
+    if (search) {
+      query.$or = [
+        { realName: { $regex: search, $options: 'i' } },
+        { displayName: { $regex: search, $options: 'i' } },
+        { campus: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (campusFilter) {
+      query.campus = campusFilter;
+    }
+
+    if (banFilter === 'banned') {
+      query.isBanned = true;
+    } else if (banFilter === 'active') {
+      query.isBanned = false;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const users = await User.find(query)
+      .sort({ [sortBy]: sortOrder })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await User.countDocuments(query);
+
+    res.json({
+      users,
+      total,
+      page,
+      pages: Math.ceil(total / limit)
+    });
+  } catch (err) {
+    console.error('Error fetching registered users:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch registered users.' });
+  }
+});
+
+// GET /api/admin/registered-users/:id/details
+router.get('/registered-users/:id/details', requireAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
+    }
+
+    const warningCount = user.warnings ? user.warnings.length : 0;
+    const totalMessages = await LiveChatMessage.countDocuments({ sender: userId, status: { $ne: 'trash' } });
+    const totalConfessions = await Confession.countDocuments({ sender: userId, status: { $ne: 'trash' } });
+    const totalMemes = await Meme.countDocuments({ sender: userId, status: { $ne: 'trash' } });
+    const totalPolls = await Poll.countDocuments({ sender: userId, status: { $ne: 'trash' } });
+
+    res.json({
+      user,
+      warningCount,
+      totalMessages,
+      totalConfessions,
+      totalMemes,
+      totalPolls
+    });
+  } catch (err) {
+    console.error('Error fetching user details:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch user details.' });
+  }
+});
+
+// GET /api/admin/export-users
+router.get('/export-users', requireAdmin, async (req, res) => {
+  try {
+    const users = await User.find({ isRegistered: true }).sort({ registrationDate: -1 });
+
+    const data = [];
+    for (const u of users) {
+      const warningCount = u.warnings ? u.warnings.length : 0;
+      const totalMessages = await LiveChatMessage.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
+      const totalConfessions = await Confession.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
+      const totalMemes = await Meme.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
+      const totalPolls = await Poll.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
+
+      data.push({
+        'Real Name': u.realName || '',
+        'Campus': u.campus || '',
+        'Anonymous Username': u.displayName || '',
+        'Registration Date': u.registrationDate ? u.registrationDate.toISOString() : '',
+        'Last Login': u.lastLogin ? u.lastLogin.toISOString() : '',
+        'Last Seen': u.lastActive ? u.lastActive.toISOString() : '',
+        'Ban Status': u.isBanned ? 'Banned' : 'Active',
+        'Warning Count': warningCount,
+        'Total Messages': totalMessages,
+        'Total Confessions': totalConfessions,
+        'Total Memes': totalMemes,
+        'Total Polls': totalPolls
+      });
+    }
+
+    const ws = xlsx.utils.json_to_sheet(data);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, 'Registered Users');
+
+    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="Registered_Users.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (err) {
+    console.error('Error exporting users:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to export users to Excel.' });
+  }
+});
+
+// DELETE /api/admin/registered-users/:id
+router.delete('/registered-users/:id', requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    await AdminLog.create({
+      action: 'DELETE_ACCOUNT',
+      details: `Admin deleted registered account of ${user.displayName} (Real Name: ${user.realName})`,
+      adminUsername: req.admin.username
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.to('admin').emit('moderation-activity', {
+        type: 'delete_account',
+        text: `Admin deleted registered account of ${user.displayName}`,
+        timestamp: new Date()
+      });
+    }
+
+    res.json({ message: 'Account deleted successfully.' });
+  } catch (err) {
+    console.error('Error deleting account:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to delete account.' });
+  }
+});
+
+// POST /api/admin/reset-requests/direct-reset
+router.post('/reset-requests/direct-reset', requireAdmin, async (req, res) => {
+  try {
+    const { userId, tempPassword } = req.body;
+    if (!userId || !tempPassword) {
+      return res.status(400).json({ message: 'User ID and temporary password are required.' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const hash = await bcrypt.hash(tempPassword, 10);
+    user.passwordHash = hash;
+    user.mustChangePassword = true;
+    await user.save();
+
+    const messageText = `Identity verified.\n\nTemporary Password:\n\n${tempPassword}\n\nPlease login using this password.\n\nYou must change your password immediately after logging in.`;
+    
+    await SupportMessage.create({
+      browserToken: user.browserToken,
+      senderType: 'admin',
+      senderName: 'Professor (ADMIN)',
+      text: messageText,
+      isSeen: false
+    });
+
+    const io = getIo(req);
+    if (io) {
+      io.to(`support-${user.browserToken}`).emit('support-message', {
+        browserToken: user.browserToken,
+        senderType: 'admin',
+        senderName: 'Professor (ADMIN)',
+        text: messageText,
+        createdAt: new Date()
+      });
+    }
+
+    res.json({ message: 'Temporary password generated and sent successfully.', tempPassword });
+  } catch (err) {
+    console.error('Error handling direct reset password:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to generate temporary password.' });
+  }
+});
+
+// GET /api/admin/reset-requests
+router.get('/reset-requests', requireAdmin, async (req, res) => {
+  try {
+    const requests = await PasswordResetRequest.find().sort({ createdAt: -1 });
+    res.json(requests);
+  } catch (err) {
+    console.error('Error fetching reset requests:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch reset requests.' });
+  }
+});
+
+// POST /api/admin/reset-requests/:id/action
+router.post('/reset-requests/:id/action', requireAdmin, async (req, res) => {
+  try {
+    const { action } = req.body;
+    const request = await PasswordResetRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found.' });
+    }
+
+    if (action === 'approve') {
+      const tempPassword = Math.random().toString(36).substring(2, 10);
+      const user = await User.findOne({ displayName: request.username });
+      if (!user) {
+        return res.status(404).json({ message: 'User not found.' });
+      }
+
+      const hash = await bcrypt.hash(tempPassword, 10);
+      user.passwordHash = hash;
+      user.mustChangePassword = true;
+      await user.save();
+
+      const messageText = `Identity verified.\n\nTemporary Password:\n\n${tempPassword}\n\nPlease login using this password.\n\nYou must change your password immediately after logging in.`;
+      
+      await SupportMessage.create({
+        browserToken: user.browserToken,
+        senderType: 'admin',
+        senderName: 'Professor (ADMIN)',
+        text: messageText,
+        isSeen: false
+      });
+
+      const io = getIo(req);
+      if (io) {
+        io.to(`support-${user.browserToken}`).emit('support-message', {
+          browserToken: user.browserToken,
+          senderType: 'admin',
+          senderName: 'Professor (ADMIN)',
+          text: messageText,
+          createdAt: new Date()
+        });
+      }
+
+      request.status = 'completed';
+      await request.save();
+
+      res.json({ message: 'Temporary password generated and sent successfully.', tempPassword });
+    } else if (action === 'reject') {
+      request.status = 'rejected';
+      await request.save();
+      res.json({ message: 'Password reset request rejected.' });
+    } else {
+      res.status(400).json({ message: 'Invalid action.' });
+    }
+  } catch (err) {
+    console.error('Error handling reset request action:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to act on reset request.' });
   }
 });
 

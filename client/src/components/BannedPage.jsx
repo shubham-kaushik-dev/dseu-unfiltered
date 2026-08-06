@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { SocketContext } from '../context/SocketContext';
 import { ToastContext } from '../context/ToastContext';
+import { UserContext } from '../context/UserContext';
 import { ShieldAlert, Send, Image, Smile, Clock, Eye } from 'lucide-react';
 import Logo from './Logo';
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-export default function BannedPage({ user }) {
+export default function BannedPage() {
+  const { user, openLoginModal } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
 
@@ -127,10 +129,7 @@ export default function BannedPage({ user }) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSendMessageSubmit = async (e) => {
-    e.preventDefault();
-    if (!inputText.trim() && !selectedFile) return;
-
+  const performSendSupportMessage = async () => {
     try {
       setUploading(true);
       const formData = new FormData();
@@ -142,7 +141,7 @@ export default function BannedPage({ user }) {
       const res = await fetch(`${API_BASE}/api/support/message`, {
         method: 'POST',
         headers: {
-          'x-anonymous-token': user.browserToken
+          'x-anonymous-token': user?.browserToken || ''
         },
         body: formData
       });
@@ -163,6 +162,20 @@ export default function BannedPage({ user }) {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleSendMessageSubmit = async (e) => {
+    e.preventDefault();
+    if (!inputText.trim() && !selectedFile) return;
+
+    if (!user || !user.isRegistered) {
+      openLoginModal(() => {
+        performSendSupportMessage();
+      });
+      return;
+    }
+
+    await performSendSupportMessage();
   };
 
   return (
@@ -252,22 +265,22 @@ export default function BannedPage({ user }) {
                   </span>
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs shadow-md border ${
                     isAdmin 
-                      ? 'bg-[#1b1230] border-purple-900/40 text-zinc-200 rounded-tl-sm' 
-                      : 'bg-purple-600 border-purple-700 text-white rounded-tr-sm'
+                      ? 'bg-white border-zinc-200 text-black rounded-tl-sm' 
+                      : 'bg-[#e9d5ff] border-purple-300 text-black rounded-tr-sm'
                   }`}>
                     {msg.imageUrl && (
-                      <a href={msg.imageUrl} target="_blank" rel="noreferrer" className="block mb-1.5 rounded-lg overflow-hidden border border-zinc-900 bg-zinc-950">
+                      <a href={msg.imageUrl} target="_blank" rel="noreferrer" className="block mb-1.5 rounded-lg overflow-hidden border border-zinc-200 bg-slate-50">
                         <img src={msg.imageUrl} alt="Support attachment" className="w-full max-h-48 object-cover hover:scale-105 transition duration-200" />
                       </a>
                     )}
                     {msg.text && <p className="break-words leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
                   </div>
                   <div className="flex items-center gap-1 px-1">
-                    <span className="text-[9px] text-zinc-600 font-mono">
+                    <span className="text-[9px] text-zinc-500 font-mono">
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {!isAdmin && (
-                      <span className="text-[9px] text-zinc-650 font-bold uppercase tracking-wider">
+                      <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
                         {msg.isSeen ? '• Seen' : '• Sent'}
                       </span>
                     )}

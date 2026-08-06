@@ -346,6 +346,10 @@ io.on('connection', async (socket) => {
         return socket.emit('chat-error', { message: 'Your identity is banned.' });
       }
 
+      if (user.mustChangePassword) {
+        return socket.emit('chat-error', { message: 'You must change your password immediately after logging in.' });
+      }
+
       if (user.mutedUntil && user.mutedUntil > new Date()) {
         const remaining = Math.ceil((user.mutedUntil - new Date()) / 1000 / 60);
         return socket.emit('chat-error', { message: `You are muted. Try again in ${remaining} minutes.` });

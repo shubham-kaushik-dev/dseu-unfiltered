@@ -6,7 +6,7 @@ import {
   Users, AlertTriangle, FileText, Settings, ShieldCheck, 
   Trash2, Undo, Check, X, ShieldAlert, Ban, Clock, 
   Settings2, Plus, Edit, Send, Image, Smile, Search, 
-  ArrowLeft, ArrowRight, Eye, ShieldAlert as StealthIcon, RefreshCw, Pin
+  ArrowLeft, ArrowRight, Eye, ShieldAlert as StealthIcon, RefreshCw, Pin, KeyRound
 } from 'lucide-react';
 import Logo from './Logo';
 
@@ -68,6 +68,25 @@ export default function AdminPanel({ onAdminStateChange }) {
   const [supportPreviewUrl, setSupportPreviewUrl] = useState('');
   const [supportSending, setSupportSending] = useState(false);
   const [supportUserTyping, setSupportUserTyping] = useState(false);
+
+  // Registered Users State
+  const [regUsers, setRegUsers] = useState([]);
+  const [regTotal, setRegTotal] = useState(0);
+  const [regPage, setRegPage] = useState(1);
+  const [regPages, setRegPages] = useState(1);
+  const [regSearch, setRegSearch] = useState('');
+  const [regCampus, setRegCampus] = useState('');
+  const [regBan, setRegBan] = useState('all');
+  const [regSortBy, setRegSortBy] = useState('registrationDate');
+  const [regSortOrder, setRegSortOrder] = useState('desc');
+  const [regLoading, setRegLoading] = useState(false);
+  const [selectedRegUser, setSelectedRegUser] = useState(null);
+  const [regUserDetails, setRegUserDetails] = useState(null);
+  const [regUserDetailsLoading, setRegUserDetailsLoading] = useState(false);
+
+  // Password Reset Requests State
+  const [resetRequests, setResetRequests] = useState([]);
+  const [resetsLoading, setResetsLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   // Settings State
@@ -145,6 +164,8 @@ export default function AdminPanel({ onAdminStateChange }) {
 
     if (activeTab === 'analytics') fetchStats();
     else if (activeTab === 'users') fetchUsers();
+    else if (activeTab === 'registered') fetchRegUsers();
+    else if (activeTab === 'resets') fetchResetRequests();
     else if (activeTab === 'reports') fetchReports();
     else if (activeTab === 'support') fetchConversations();
     else if (activeTab === 'settings') fetchSettings();
@@ -152,7 +173,7 @@ export default function AdminPanel({ onAdminStateChange }) {
     else if (activeTab === 'history') fetchSessions();
     else if (activeTab === 'announcements') fetchAnnouncementsHistory();
     else if (activeTab === 'logs') fetchAuditLogs();
-  }, [activeTab, adminLoggedIn, usersPage, usersFilter, usersSort, supportPage, supportFilter, announcementPage, announcementFilter]);
+  }, [activeTab, adminLoggedIn, usersPage, usersFilter, usersSort, supportPage, supportFilter, announcementPage, announcementFilter, regPage, regCampus, regBan, regSortBy, regSortOrder]);
 
   // Sync users list whenever search query changes (debounced)
   useEffect(() => {
@@ -163,6 +184,16 @@ export default function AdminPanel({ onAdminStateChange }) {
     }, 400);
     return () => clearTimeout(timer);
   }, [usersSearch]);
+
+  // Sync registered users list whenever search query changes (debounced)
+  useEffect(() => {
+    if (!adminLoggedIn || activeTab !== 'registered') return;
+    const timer = setTimeout(() => {
+      setRegPage(1);
+      fetchRegUsers();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [regSearch]);
 
   // Debounce search inside support
   useEffect(() => {
@@ -342,6 +373,139 @@ export default function AdminPanel({ onAdminStateChange }) {
       console.error(err);
     } finally {
       setUsersLoading(false);
+    }
+  };
+
+  const fetchRegUsers = async () => {
+    try {
+      setRegLoading(true);
+      const query = new URLSearchParams({
+        page: regPage,
+        search: regSearch,
+        campusFilter: regCampus,
+        banFilter: regBan,
+        sortBy: regSortBy,
+        sortOrder: regSortOrder
+      });
+      const response = await adminFetch(`/api/admin/registered-users?${query.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRegUsers(data.users);
+        setRegTotal(data.total);
+        setRegPages(data.pages);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showToast(err.message || 'Failed to fetch registered users.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error connecting to registered users API.', 'error');
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  const fetchRegUserDetails = async (userId) => {
+    try {
+      setRegUserDetailsLoading(true);
+      const response = await adminFetch(`/api/admin/registered-users/${userId}/details`);
+      if (response.ok) {
+        const data = await response.json();
+        setRegUserDetails(data);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showToast(err.message || 'Failed to fetch user details.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error fetching user details.', 'error');
+    } finally {
+      setRegUserDetailsLoading(false);
+    }
+  };
+
+  const fetchResetRequests = async () => {
+    try {
+      setResetsLoading(true);
+      const response = await adminFetch('/api/admin/reset-requests');
+      if (response.ok) {
+        const data = await response.json();
+        setResetRequests(data);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showToast(err.message || 'Failed to fetch reset requests.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error fetching reset requests.', 'error');
+    } finally {
+      setResetsLoading(false);
+    }
+  };
+
+  const handleResetAction = async (requestId, action) => {
+    try {
+      const response = await adminFetch(`/api/admin/reset-requests/${requestId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        showToast(data.message || 'Reset request updated successfully.', 'success');
+        fetchResetRequests();
+      } else {
+        showToast(data.message || 'Failed to update reset request.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error acting on reset request.', 'error');
+    }
+  };
+
+  const handleDeleteAccount = async (userId) => {
+    if (!window.confirm('Are you absolutely sure you want to permanently delete this user account? This will wipe their credentials and profile. This action is irreversible.')) {
+      return;
+    }
+    try {
+      const response = await adminFetch(`/api/admin/registered-users/${userId}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        showToast('User account deleted successfully.', 'success');
+        setSelectedRegUser(null);
+        setRegUserDetails(null);
+        fetchRegUsers();
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showToast(err.message || 'Failed to delete account.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error deleting account.', 'error');
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      showToast('Generating Excel report...', 'info');
+      const response = await adminFetch('/api/admin/export-users');
+      if (!response.ok) {
+        throw new Error('Failed to export users');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Registered_Users.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Excel report downloaded successfully.', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to export registered users to Excel.', 'error');
     }
   };
 
@@ -857,6 +1021,8 @@ export default function AdminPanel({ onAdminStateChange }) {
         {[
           { id: 'analytics', label: 'Dashboard', icon: ShieldCheck },
           { id: 'users', label: 'Directory', icon: Users },
+          { id: 'registered', label: 'Registered Users', icon: Users },
+          { id: 'resets', label: 'Reset Requests', icon: KeyRound },
           { id: 'reports', label: 'Reports', icon: AlertTriangle },
           { id: 'support', label: 'Support Inbox', icon: Send },
           { id: 'settings', label: 'Custom Settings', icon: Settings },
@@ -934,6 +1100,373 @@ export default function AdminPanel({ onAdminStateChange }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab 3: Registered Users List */}
+        {activeTab === 'registered' && (
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Registered Users</h2>
+              
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-650" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, campus..."
+                    value={regSearch}
+                    onChange={(e) => setRegSearch(e.target.value)}
+                    className="bg-[#0e0f14] border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-purple-650"
+                  />
+                </div>
+
+                {/* Campus Filter */}
+                <input
+                  type="text"
+                  placeholder="Filter Campus..."
+                  value={regCampus}
+                  onChange={(e) => setRegCampus(e.target.value)}
+                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 placeholder-zinc-700 focus:outline-none"
+                />
+
+                {/* Ban Filter */}
+                <select
+                  value={regBan}
+                  onChange={(e) => setRegBan(e.target.value)}
+                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active Only</option>
+                  <option value="banned">Banned Only</option>
+                </select>
+
+                {/* Sort By */}
+                <select
+                  value={regSortBy}
+                  onChange={(e) => setRegSortBy(e.target.value)}
+                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                >
+                  <option value="registrationDate">Registration Date</option>
+                  <option value="realName">Real Name</option>
+                  <option value="displayName">Anonymous Username</option>
+                  <option value="lastLogin">Last Login</option>
+                  <option value="lastActive">Last Seen</option>
+                </select>
+
+                {/* Sort Order */}
+                <select
+                  value={regSortOrder}
+                  onChange={(e) => setRegSortOrder(e.target.value)}
+                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                >
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+
+                {/* Export Excel */}
+                <button
+                  onClick={handleExportExcel}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-650 to-teal-650 hover:from-emerald-550 hover:to-teal-550 text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-lg shadow-emerald-500/10 transition transform active:scale-98"
+                >
+                  Export Excel
+                </button>
+              </div>
+            </div>
+
+            {/* Grid/Table List */}
+            {regLoading ? (
+              <p className="text-zinc-500 font-medium select-none">Fetching registered users list...</p>
+            ) : regUsers.length === 0 ? (
+              <p className="text-zinc-650 font-medium select-none">No registered users matched current filters.</p>
+            ) : (
+              <div className="overflow-x-auto border border-zinc-850 rounded-2xl shadow-xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#0e0f14] border-b border-zinc-850 text-zinc-400 font-bold uppercase tracking-wider select-none">
+                      <th className="p-4">Real Name</th>
+                      <th className="p-4">Campus</th>
+                      <th className="p-4">Anonymous Username</th>
+                      <th className="p-4">Registration Date</th>
+                      <th className="p-4">Last Login</th>
+                      <th className="p-4">Last Seen</th>
+                      <th className="p-4 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {regUsers.map((u) => (
+                      <tr 
+                        key={u._id} 
+                        onClick={() => {
+                          setSelectedRegUser(u);
+                          fetchRegUserDetails(u._id);
+                        }}
+                        className="border-b border-zinc-850/60 hover:bg-zinc-900/40 text-zinc-300 font-semibold cursor-pointer transition select-none"
+                      >
+                        <td className="p-4 font-bold text-white">{u.realName}</td>
+                        <td className="p-4">{u.campus}</td>
+                        <td className="p-4 text-purple-400">@{u.displayName}</td>
+                        <td className="p-4 text-zinc-550">{u.registrationDate ? new Date(u.registrationDate).toLocaleDateString() : 'N/A'}</td>
+                        <td className="p-4 text-zinc-550">{u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Never'}</td>
+                        <td className="p-4 text-zinc-550">{u.lastActive ? new Date(u.lastActive).toLocaleDateString() : 'Offline'}</td>
+                        <td className="p-4 text-center">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                            u.isBanned ? 'bg-red-950/40 text-red-400 border border-red-900/30' : 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30'
+                          }`}>
+                            {u.isBanned ? 'Banned' : 'Active'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {regPages > 1 && (
+              <div className="flex items-center justify-between text-xs font-bold text-zinc-500 pt-2 select-none">
+                <button
+                  disabled={regPage === 1}
+                  onClick={() => setRegPage(p => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 bg-[#0e0f14] hover:bg-zinc-900 border border-zinc-850 rounded-lg disabled:opacity-40 cursor-pointer"
+                >
+                  Prev
+                </button>
+                <span>Page {regPage} of {regPages}</span>
+                <button
+                  disabled={regPage === regPages}
+                  onClick={() => setRegPage(p => Math.min(regPages, p + 1))}
+                  className="px-3 py-1.5 bg-[#0e0f14] hover:bg-zinc-900 border border-zinc-850 rounded-lg disabled:opacity-40 cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 4: Password Reset Requests */}
+        {activeTab === 'resets' && (
+          <div className="space-y-6">
+            <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Password Reset Requests</h2>
+
+            {resetsLoading ? (
+              <p className="text-zinc-500 font-medium select-none">Fetching password reset queue...</p>
+            ) : resetRequests.length === 0 ? (
+              <p className="text-zinc-650 font-medium select-none">No pending password reset requests.</p>
+            ) : (
+              <div className="overflow-x-auto border border-zinc-850 rounded-2xl shadow-xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#0e0f14] border-b border-zinc-850 text-zinc-400 font-bold uppercase tracking-wider select-none">
+                      <th className="p-4">Username</th>
+                      <th className="p-4">Real Name</th>
+                      <th className="p-4">Campus</th>
+                      <th className="p-4">Reason</th>
+                      <th className="p-4">Date</th>
+                      <th className="p-4 text-center">Status</th>
+                      <th className="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resetRequests.map((r) => (
+                      <tr 
+                        key={r._id}
+                        className="border-b border-zinc-850/60 hover:bg-zinc-900/20 text-zinc-300 font-semibold select-none"
+                      >
+                        <td className="p-4 text-purple-400 font-bold">@{r.username}</td>
+                        <td className="p-4 font-bold text-white">{r.realName}</td>
+                        <td className="p-4">{r.campus}</td>
+                        <td className="p-4 max-w-xs truncate leading-relaxed text-zinc-450" title={r.reason}>{r.reason}</td>
+                        <td className="p-4 text-zinc-550">{new Date(r.createdAt).toLocaleDateString()}</td>
+                        <td className="p-4 text-center">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                            r.status === 'pending' ? 'bg-amber-950/40 text-amber-400 border border-amber-900/30' :
+                            r.status === 'completed' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' :
+                            'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                          }`}>
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          {r.status === 'pending' && (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => handleResetAction(r._id, 'approve')}
+                                className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-550 text-white rounded-lg cursor-pointer text-[10px] font-bold uppercase transition"
+                              >
+                                Approve & Send
+                              </button>
+                              <button
+                                onClick={() => handleResetAction(r._id, 'reject')}
+                                className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-450 hover:text-white rounded-lg cursor-pointer text-[10px] font-bold uppercase transition"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* User Details Modal overlay */}
+        {selectedRegUser && (
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] select-none">
+            <div className="relative max-w-lg w-full bg-[#0e0f14] border border-zinc-800 rounded-[24px] p-6 shadow-2xl space-y-6">
+              {/* Close Button */}
+              <button
+                onClick={() => { setSelectedRegUser(null); setRegUserDetails(null); }}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 cursor-pointer font-bold font-mono p-1"
+              >
+                ✕
+              </button>
+
+              <div className="space-y-1.5 text-center">
+                <h3 className="text-xl font-bold uppercase text-white tracking-wide">User Details</h3>
+                <p className="text-purple-400 font-bold text-sm">@{selectedRegUser.displayName}</p>
+              </div>
+
+              {regUserDetailsLoading ? (
+                <p className="text-zinc-500 text-center py-8 font-medium">Fetching detailed statistics...</p>
+              ) : regUserDetails ? (
+                <div className="space-y-5">
+                  {/* Private Metadata Grid */}
+                  <div className="grid grid-cols-2 gap-4 bg-zinc-950/40 p-4 border border-zinc-850 rounded-2xl text-xs text-zinc-400">
+                    <div>
+                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Real Name</span>
+                      <span className="text-sm font-black text-white mt-1 block">{regUserDetails.user.realName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Campus</span>
+                      <span className="text-sm font-semibold text-zinc-350 mt-1 block">{regUserDetails.user.campus}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Registration Date</span>
+                      <span className="font-medium text-zinc-305 mt-1 block">
+                        {regUserDetails.user.registrationDate ? new Date(regUserDetails.user.registrationDate).toLocaleDateString() : 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Last Login</span>
+                      <span className="font-medium text-zinc-355 mt-1 block">
+                        {regUserDetails.user.lastLogin ? new Date(regUserDetails.user.lastLogin).toLocaleDateString() : 'Never'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Last Seen</span>
+                      <span className="font-medium text-zinc-355 mt-1 block">
+                        {regUserDetails.user.lastActive ? new Date(regUserDetails.user.lastActive).toLocaleDateString() : 'Offline'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Ban Status</span>
+                      <span className={`font-black mt-1 block uppercase ${regUserDetails.user.isBanned ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {regUserDetails.user.isBanned ? 'Banned' : 'Active'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Activity Stats Grid */}
+                  <div className="grid grid-cols-5 gap-3 text-center">
+                    {[
+                      { label: 'Warnings', value: regUserDetails.warningCount, color: 'text-amber-400' },
+                      { label: 'Messages', value: regUserDetails.totalMessages, color: 'text-zinc-200' },
+                      { label: 'Confessions', value: regUserDetails.totalConfessions, color: 'text-zinc-200' },
+                      { label: 'Memes', value: regUserDetails.totalMemes, color: 'text-zinc-200' },
+                      { label: 'Polls', value: regUserDetails.totalPolls, color: 'text-zinc-200' }
+                    ].map((stat, i) => (
+                      <div key={i} className="p-3 bg-[#0e0f14] border border-zinc-850 rounded-xl">
+                        <span className="text-[9px] text-zinc-650 font-bold uppercase tracking-wider block leading-none">{stat.label}</span>
+                        <span className={`text-lg font-black mt-1 block leading-none ${stat.color}`}>{stat.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Action Triggers */}
+                  <div className="flex flex-wrap gap-3.5 pt-3 border-t border-zinc-850">
+                    {/* Toggle Ban */}
+                    <button
+                      onClick={async () => {
+                        const action = regUserDetails.user.isBanned ? 'unban' : 'ban';
+                        try {
+                          const res = await adminFetch(`/api/admin/users/${regUserDetails.user._id}/${action}`, {
+                            method: 'POST'
+                          });
+                          if (res.ok) {
+                            showToast(`User ${action === 'ban' ? 'banned' : 'unbanned'} successfully.`, 'success');
+                            fetchRegUserDetails(regUserDetails.user._id);
+                            fetchRegUsers();
+                          } else {
+                            const err = await res.json().catch(() => ({}));
+                            showToast(err.message || 'Failed to update ban status.', 'error');
+                          }
+                        } catch (err) {
+                          console.error(err);
+                          showToast('Error updating ban status.', 'error');
+                        }
+                      }}
+                      className={`flex-1 py-2.5 font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer text-center text-white transition ${
+                        regUserDetails.user.isBanned 
+                          ? 'bg-emerald-600 hover:bg-emerald-550 shadow-emerald-500/10 shadow-lg' 
+                          : 'bg-amber-600 hover:bg-amber-550 shadow-amber-500/10 shadow-lg'
+                      }`}
+                    >
+                      {regUserDetails.user.isBanned ? 'Unban User' : 'Ban User'}
+                    </button>
+
+                    {/* Reset Password */}
+                    <button
+                      onClick={async () => {
+                        const tempPassword = Math.random().toString(36).substring(2, 10);
+                        if (!window.confirm(`Reset this user's password to direct temporary random credential: "${tempPassword}" and push it into their appeal support chat?`)) {
+                          return;
+                        }
+                        try {
+                          const res = await adminFetch(`/api/admin/reset-requests/direct-reset`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              userId: regUserDetails.user._id,
+                              tempPassword
+                            })
+                          });
+                          if (res.ok) {
+                            showToast(`Temporary password generated and sent: ${tempPassword}`, 'success');
+                          } else {
+                            const err = await res.json().catch(() => ({}));
+                            showToast(err.message || 'Failed to generate password.', 'error');
+                          }
+                        } catch (err) {
+                          console.error(err);
+                          showToast('Error generating password.', 'error');
+                        }
+                      }}
+                      className="flex-1 py-2.5 bg-purple-650 hover:bg-purple-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer text-center shadow-lg shadow-purple-600/10 transition animate-pulse"
+                    >
+                      Reset Password
+                    </button>
+
+                    {/* Delete Account */}
+                    <button
+                      onClick={() => handleDeleteAccount(regUserDetails.user._id)}
+                      className="w-full py-2.5 bg-red-950/40 hover:bg-red-900/30 text-red-400 font-bold text-xs uppercase tracking-wider rounded-xl border border-red-900/30 cursor-pointer text-center transition"
+                    >
+                      Delete Account
+                    </button>
+                  </div>
+
+                </div>
+              ) : null}
+
+            </div>
           </div>
         )}
 
@@ -1190,8 +1723,8 @@ export default function AdminPanel({ onAdminStateChange }) {
                       }}
                       className={`w-full p-3 rounded-xl flex items-center justify-between text-left cursor-pointer transition ${
                         selectedConversationToken === c.user.browserToken 
-                          ? 'bg-[#1b1230] border border-purple-900/30' 
-                          : 'hover:bg-zinc-900/40 border border-transparent'
+                          ? 'bg-[#2d1b4e] border border-purple-700 text-white shadow-lg' 
+                          : 'hover:bg-zinc-900/50 border border-transparent'
                       }`}
                     >
                       <div className="truncate space-y-0.5">
@@ -1256,22 +1789,22 @@ export default function AdminPanel({ onAdminStateChange }) {
                           </span>
                           <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs shadow-md border ${
                             isAdmin 
-                              ? 'bg-purple-600 border-purple-700 text-white rounded-tr-sm'
-                              : 'bg-[#1b1230] border-purple-900/40 text-zinc-200 rounded-tl-sm'
+                              ? 'bg-[#e9d5ff] border-purple-300 text-black rounded-tr-sm'
+                              : 'bg-white border-zinc-200 text-black rounded-tl-sm'
                           }`}>
                             {m.imageUrl && (
-                              <a href={m.imageUrl} target="_blank" rel="noreferrer" className="block mb-1.5 rounded-lg overflow-hidden border border-zinc-950 bg-zinc-950">
+                              <a href={m.imageUrl} target="_blank" rel="noreferrer" className="block mb-1.5 rounded-lg overflow-hidden border border-zinc-200 bg-slate-50">
                                 <img src={m.imageUrl} alt="Support attachment" className="w-full max-h-48 object-cover hover:scale-105 transition" />
                               </a>
                             )}
                             {m.text && <p className="break-words leading-relaxed whitespace-pre-wrap">{m.text}</p>}
                           </div>
                           <div className="flex items-center gap-1.5 px-1 select-none">
-                            <span className="text-[9px] text-zinc-650 font-mono">
+                            <span className="text-[9px] text-zinc-500 font-mono">
                               {new Date(m.createdAt).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}
                             </span>
                             {isAdmin && (
-                              <span className="text-[9px] text-zinc-650 font-bold uppercase tracking-wider">
+                              <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
                                 {m.isSeen ? '• Read' : '• Sent'}
                               </span>
                             )}

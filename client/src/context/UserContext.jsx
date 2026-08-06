@@ -31,6 +31,23 @@ export function UserProvider({ children }) {
   const [adminCsrfToken, _setAdminCsrfToken] = useState(() => localStorage.getItem('dseu_admin_csrf_token') || '');
   const [adminJwt, _setAdminJwt] = useState(() => localStorage.getItem('dseu_admin_jwt') || '');
 
+  // Registration & login modal states
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginModalCallback, setLoginModalCallback] = useState(null);
+
+  const openLoginModal = (callback) => {
+    setLoginModalCallback(() => callback);
+    setShowLoginModal(true);
+  };
+
+  const onLoginSuccess = () => {
+    setShowLoginModal(false);
+    if (loginModalCallback) {
+      loginModalCallback();
+      setLoginModalCallback(null);
+    }
+  };
+
   const setAdminCsrfToken = (token) => {
     _setAdminCsrfToken(token || '');
     if (token) {
@@ -113,6 +130,12 @@ export function UserProvider({ children }) {
     }
   };
 
+  const logout = async () => {
+    localStorage.removeItem('dseu_unfiltered_token');
+    setUser(null);
+    await fetchProfile();
+  };
+
   const adminFetch = async (url, options = {}) => {
     const csrfToken = adminCsrfToken || localStorage.getItem('dseu_admin_csrf_token') || '';
     const jwtToken = adminJwt || localStorage.getItem('dseu_admin_jwt') || '';
@@ -170,7 +193,12 @@ export function UserProvider({ children }) {
       setAdminCsrfToken,
       adminJwt,
       setAdminJwt,
-      adminFetch
+      adminFetch,
+      logout,
+      showLoginModal,
+      setShowLoginModal,
+      openLoginModal,
+      onLoginSuccess
     }}>
       {children}
     </UserContext.Provider>

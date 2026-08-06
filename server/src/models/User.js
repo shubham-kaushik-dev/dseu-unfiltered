@@ -12,6 +12,30 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  realName: {
+    type: String,
+    default: null
+  },
+  passwordHash: {
+    type: String,
+    default: null
+  },
+  isRegistered: {
+    type: Boolean,
+    default: false
+  },
+  registrationDate: {
+    type: Date,
+    default: null
+  },
+  lastLogin: {
+    type: Date,
+    default: null
+  },
+  mustChangePassword: {
+    type: Boolean,
+    default: false
+  },
   campus: {
     type: String,
     default: 'DSEU',

@@ -5,6 +5,8 @@ import { ToastProvider, ToastContext } from './context/ToastContext';
 import SplashScreen from './components/SplashScreen';
 import DashboardPage from './pages/DashboardPage';
 import BannedPage from './components/BannedPage';
+import ForceChangePassword from './components/ForceChangePassword';
+import LoginModal from './components/LoginModal';
 const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
 import Logo from './components/Logo';
 import { ShieldCheck, HardHat, Lock } from 'lucide-react';
@@ -19,7 +21,10 @@ function AppContent() {
     isMaintenanceActive, 
     maintenanceMessage, 
     setIsMaintenanceActive, 
-    refreshProfile 
+    refreshProfile,
+    showLoginModal,
+    setShowLoginModal,
+    onLoginSuccess
   } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
@@ -80,9 +85,19 @@ function AppContent() {
     }
   };
 
+  // 0. Render Force Password Change Screen if user logged in with temp password
+  if (user?.mustChangePassword) {
+    return <ForceChangePassword />;
+  }
+
   // 1. Render Ban Lockout Screen if user is banned
   if (isBanned || user?.isBanned) {
-    return <BannedPage user={user || { browserToken: localStorage.getItem('dseu_unfiltered_token') }} />;
+    return (
+      <>
+        <BannedPage user={user || { browserToken: localStorage.getItem('dseu_unfiltered_token') }} />
+        <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} />
+      </>
+    );
   }
 
   // 2. Render maintenance page if active
@@ -154,7 +169,10 @@ function AppContent() {
 
   // 3. Normal Flow
   return entered ? (
-    <DashboardPage />
+    <>
+      <DashboardPage />
+      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} />
+    </>
   ) : (
     <SplashScreen user={user} loading={loading} onComplete={() => setEntered(true)} />
   );

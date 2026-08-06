@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export default function ChatBox({ isAdmin, adminToken }) {
-  const { user, adminCsrfToken, adminFetch } = useContext(UserContext);
+  const { user, adminCsrfToken, adminFetch, openLoginModal } = useContext(UserContext);
   const { socket, onlineCount, slowModeSeconds } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
 
@@ -209,6 +209,31 @@ export default function ChatBox({ isAdmin, adminToken }) {
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (inputText.trim() === '' || cooldown > 0) return;
+
+    if (!user || !user.isRegistered) {
+      openLoginModal(() => {
+        socket.emit('send-chat-message', {
+          text: inputText,
+          replyTo: replyTarget?._id || null,
+          messageType: sendAsNotice ? 'notice' : 'normal'
+        });
+
+        if (slowModeSeconds > 0 && user?.role !== 'admin') {
+          setCooldown(slowModeSeconds);
+        }
+
+        setInputText('');
+        setReplyTarget(null);
+        setSendAsNotice(false);
+        setIsTyping(false);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        socket.emit('typing', { isTyping: false });
+        if (inputRef.current) {
+          inputRef.current.style.height = '48px';
+        }
+      });
+      return;
+    }
 
     // Send payload supporting replies and notice types
     socket.emit('send-chat-message', {

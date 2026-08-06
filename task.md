@@ -1,63 +1,65 @@
-# Checklists - Advanced Mod, Support, Trash & Stealth Presence
+# Task List - User Registration, Recovery, Profiles, Excel Export, and Admin Improvements
 
-## Phase 1: Database & Schema Extensions
-- [x] Create `Announcement` model schema
-- [x] Create `PinnedMessage` model schema
-- [x] Create `SupportMessage` model schema
-- [x] Create `AdminNotification` model schema
-- [x] Create `AdminSession` model schema
-- [x] Update `User` model schema with warnings, notes, shadow-ban, browser, ip, ban fields
-- [x] Update `LiveChatMessage`, `Confession`, `Meme`, `Poll` schemas with trash status fields
-- [x] Update `LiveChatMessage` schema with replyTo reference and messageType field
+## Phase 1: Database & Model Extensions
+- [x] Update `User` model (`User.js`):
+  - Add `realName` (String)
+  - Add `passwordHash` (String, bcrypt)
+  - Add `isRegistered` (Boolean, default false)
+  - Add `registrationDate` (Date)
+  - Add `lastLogin` (Date)
+  - Add `mustChangePassword` (Boolean, default false)
+- [x] Create `PasswordResetRequest` model (`PasswordResetRequest.js`):
+  - `username` (String)
+  - `realName` (String)
+  - `campus` (String)
+  - `reason` (String)
+  - `status` (String: 'pending', 'completed', 'rejected')
+  - `createdAt` (Date)
 
-## Phase 2: Middleware & Authentication Integration
-- [x] Update `parseUser` in `auth.js` to handle admin session, map it to `Professor (ADMIN)` User document, and restrict banned users access except for auth/me & support routes.
-- [x] Implement backend protection checks to block spoofing of `Professor (ADMIN)` and verify roles.
-- [x] Configure robust cookie settings (`sameSite: 'lax'`, `secure` in production, `httpOnly`).
-- [x] Verify backend compares the correct CSRF token and provides precise error messages.
+## Phase 2: Backend Routes & Middleware
+- [x] Add `xlsx` dependency to `server/package.json`.
+- [x] Create authentication and registration endpoints in `auth.js` / new auth routes:
+  - `POST /api/auth/register` (Hash password, update current/anonymous user record to registered)
+  - `POST /api/auth/login` (Verify password hash, return token)
+  - `POST /api/auth/change-password` (Update password, clear `mustChangePassword` flag)
+  - `POST /api/auth/reset-request` (Submit PasswordResetRequest)
+  - `POST /api/auth/update-profile` (Edit Anonymous Username, Password)
+- [x] Add admin moderation and recovery endpoints in `admin.js`:
+  - `GET /api/admin/registered-users` (Paginated list of registered users with search/filter/sort)
+  - `GET /api/admin/registered-users/:id/details` (Get user stats: warnings count, messages count, confessions count, memes count, polls count)
+  - `GET /api/admin/export-users` (Excel sheet download of all registered users and stats)
+  - `DELETE /api/admin/registered-users/:id` (Delete account, anonymize previous public contents, keep log)
+  - `GET /api/admin/reset-requests` (Get reset requests queue)
+  - `POST /api/admin/reset-requests/:id/action` (Generate temporary password, update hash, mark completed, send Support chat message)
+- [x] Update `parseUser` middleware (`auth.js`):
+  - Recognize registered users, enforce ban system restrictions (cannot chat, confess, meme, vote).
+  - Enforce `mustChangePassword` blocks (only allow change-password API/screen, block normal actions).
 
-## Phase 3: REST API Implementation
-- [x] Create `server/src/routes/support.js` containing banned support chat endpoints
-- [x] Create public settings endpoint `GET /api/settings`, `GET /api/announcements`, `GET /api/chat/pinned`
-- [x] Update `admin.js` to implement warnings management, admin notes editor, settings customizer, trash bin restorer/purger, support replies, chat pinning, session login history logs, and paginated official notice history.
+## Phase 3: Client Authentication & Routing Contexts
+- [x] Create registration / login overlay pages & modal components (`LoginModal.jsx`):
+  - Tabbed interface for Login, Register, Forgot Password.
+  - Intercept chat sending, support messages, appeals to trigger modal for unregistered users.
+  - Auto-send originally typed message after login/registration.
+- [x] Create Profile management modal (`ProfileModal.jsx`) for editing username and password.
+- [x] Create forced password change screen (`ForceChangePassword.jsx`) when `mustChangePassword` is active.
+- [x] Update `UserContext.jsx`:
+  - Expose `register`, `login`, `logout`, `changePassword`, `updateProfile` handlers.
+  - Keep `user` context state populated with registration properties.
 
-## Phase 4: Sockets & Real-Time Setup
-- [x] Update `server.js` Socket.IO logic to manage typing, seen, messages inside `support-${token}` room.
-- [x] Integrate user-typing, user-warned, announcement updates, and stealth mode online count sync inside server socket event loop.
-- [x] Implement daily soft-delete cleanup schedule intervals.
-- [x] Set shadow-ban emit boundaries to prevent message leakage.
+## Phase 4: Admin Panel Tab Extensions
+- [x] Create **Registered Users** tab in `AdminPanel.jsx`:
+  - Grid list showing Real Name, Campus, Anonymous Username, Registration Date, Last Login, Last Seen, Ban Status.
+  - Search, filter (by campus and ban status), sorting, and Excel download button.
+  - Clicking user opens **User Details** modal displaying stats (warning count, messages, confessions, memes, polls) with Reset Password, Ban, Unban, Delete Account triggers.
+- [x] Create **Password Reset Requests** tab in `AdminPanel.jsx`:
+  - Table of requests with action triggers (Generate Temp Password & Send, Reject).
+- [x] Optimize Support & Appeal Chat UI in `BannedPage.jsx` and `AdminPanel.jsx`:
+  - White background + black text for incoming messages.
+  - Light purple background + black text for outgoing messages.
+  - Grey timestamps.
+- [x] Polish Admin Panel typography, spacing, contrast, message alignments, and unread conversation highlight.
 
-## Phase 5: Client-Side UI Redesigns
-- [x] Create `BannedPage.jsx` overlay page featuring bidirectional support messenger
-- [x] Update `App.jsx` to render `BannedPage` and load dynamic site name/logo/theme variables
-- [x] Update `ChatBox.jsx` with chat replies previews, admin style highlighting, typing indicators, pinned panels, and Professor presence indicators
-- [x] Update `AdminPanel.jsx` to add Support Inbox messenger tab, Announcements & Notice History tab, Settings editor tab, Trash Bin tab, and Login History logs tab.
-- [x] Implement DiceBear avatar fallback mappings inside general card, avatar, and comment elements.
-- [x] Scale up font sizes globally in `index.css` by 10-15%.
-- [x] Integrate reusable `adminFetch` helper in `UserContext` to automate CSRF tokens and cross-origin `credentials: 'include'` headers.
-- [x] Intercept session expiration errors and redirect admin back to login with indicator warning toast.
-- [x] Import localized `professor-avatar.png` asset to override DiceBear generators for authenticated admin accounts.
-- [x] Style admin avatar to 40x40px inside global lounge chat messages and 48x48px inside left sidebar drawer profile widgets.
-
-## Phase 6: Build & Final Verification
-- [x] Install npm dependencies
-- [x] Build production assets with Vite
-- [x] Configure DNS resolvers override inside backend to solve MongoDB querySrv SRV lookup issues.
-- [x] Setup 5x reconnect retry logic with backoff for primary database cluster.
-- [x] Bind HTTP server listen *after* database connections resolve to prevent buffering timeout crashes on startup.
-- [x] Run application dev servers and perform manual/automated testing passes
-- [x] Disable file system writes inside logger (`logger.js`) when deploying to serverless Vercel environments.
-- [x] Bypass local uploads folder creation on server boot (`server.js`) if running on Vercel.
-- [x] Disable local backups folder creation on cron trigger (`backup.js`) if running on Vercel.
-- [x] Add default and named ESM exports for Express `app` and `server` at the bottom of `server.js`.
-- [x] Configure Socket.IO server target endpoint dynamically using `import.meta.env.VITE_API_URL` fallback to localhost.
-- [x] Create `client/.env.example` defining default VITE_API_URL settings for production Vercel servers.
-- [x] Configure reusable API_BASE constant matching VITE_API_URL environment variables.
-- [x] Prepend API_BASE to every `fetch('/api/...')` call inside the client codebase.
-- [x] Enable cross-origin credentials inclusions on frontend user identity checks (`/api/auth/me`).
-- [x] Migrate admin authentication mechanism from cookies to token-based JWT Bearer headers.
-- [x] Setup frontend token persistence storage inside localStorage under `dseu_admin_jwt`.
-- [x] Remove admin session cookie setups (`res.cookie`) and clearances (`res.clearCookie`) from server-side configurations.
-- [x] Configure global `window.fetch` interceptor on frontend to automatically send `x-anonymous-token` header.
-- [x] Prioritize `x-anonymous-token` header over cookies on the backend inside `parseUser` middleware.
-- [x] Implement UI "Reset Identity" button next to student name in dashboard header for manual resets.
+## Phase 5: Testing & Verification
+- [x] Install node dependencies (`xlsx` package in server).
+- [x] Run production asset builds (`npm run build`).
+- [x] Manually test registration, login, profile updates, password requests, force password screen, Excel download, and banned user restrictions.

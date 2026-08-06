@@ -3,6 +3,7 @@ import { UserContext } from '../context/UserContext';
 import { SocketContext } from '../context/SocketContext';
 import Logo from '../components/Logo';
 import professorAvatar from '../assets/professor-avatar.png';
+import ProfileModal from '../components/ProfileModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -19,12 +20,13 @@ import {
 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { user, isBanned } = useContext(UserContext);
+  const { user, isBanned, openLoginModal, logout } = useContext(UserContext);
   const { socket, onlineCount, pinnedAnnouncement, setPinnedAnnouncement } = useContext(SocketContext);
   
   const [activeTab, setActiveTab] = useState('chat');
   const [isAdmin, setIsAdmin] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   
   // Unread badges state
   const [unreadCounts, setUnreadCounts] = useState({
@@ -280,32 +282,63 @@ export default function DashboardPage() {
         )}
 
         {/* User Identity widget */}
-        <div className="p-5 bg-white border-t border-slate-200/65 flex items-center justify-between shadow-[0_-2px_10px_rgba(148,163,184,0.02)]">
-          <div className="flex items-center gap-3 overflow-hidden">
-            {user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' ? (
-              <img 
-                src={professorAvatar} 
-                alt="Admin Avatar" 
-                className="h-12 w-12 rounded-full border border-slate-200 bg-slate-50 object-cover shrink-0" 
-              />
-            ) : (
-              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-full text-purple-600 shrink-0">
-                <UserIcon className="h-4 w-4" />
+        <div className="p-5 bg-white border-t border-slate-200/65 flex flex-col gap-3 shadow-[0_-2px_10px_rgba(148,163,184,0.02)]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 overflow-hidden">
+              {user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' ? (
+                <img 
+                  src={professorAvatar} 
+                  alt="Admin Avatar" 
+                  className="h-12 w-12 rounded-full border border-slate-200 bg-slate-50 object-cover shrink-0" 
+                />
+              ) : (
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-full text-purple-650 shrink-0">
+                  <UserIcon className="h-4 w-4" />
+                </div>
+              )}
+              <div className="flex flex-col leading-none overflow-hidden">
+                <span className="text-[14px] font-black text-slate-800 truncate">{user?.displayName}</span>
+                <span className="text-[9px] text-slate-400 font-bold tracking-wider mt-1.5 uppercase">
+                  {user?.isRegistered ? 'Registered User' : 'Visitor ID'}
+                </span>
               </div>
-            )}
-            <div className="flex flex-col leading-none overflow-hidden">
-              <span className="text-[14px] font-black text-slate-800 truncate">{user?.displayName}</span>
-              <span className="text-[9px] text-slate-400 font-bold tracking-wider mt-1.5 uppercase">Student ID</span>
             </div>
+
+            <button
+              onClick={toggleSound}
+              className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition cursor-pointer"
+              title={soundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
+            >
+              {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-red-500" />}
+            </button>
           </div>
 
-          <button
-            onClick={toggleSound}
-            className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition cursor-pointer"
-            title={soundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
-          >
-            {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-red-500" />}
-          </button>
+          {/* User Auth Actions */}
+          <div className="flex gap-2">
+            {user?.isRegistered ? (
+              <>
+                <button
+                  onClick={() => setShowProfileModal(true)}
+                  className="flex-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-850 text-[11px] font-bold uppercase tracking-wider rounded-lg border border-slate-200 transition cursor-pointer text-center"
+                >
+                  Profile
+                </button>
+                <button
+                  onClick={logout}
+                  className="flex-1 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 hover:text-red-750 text-[11px] font-bold uppercase tracking-wider rounded-lg border border-red-100 transition cursor-pointer text-center"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => openLoginModal(() => {})}
+                className="w-full py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800 text-[11px] font-extrabold uppercase tracking-wider rounded-lg border border-purple-100 transition cursor-pointer text-center"
+              >
+                Login / Register
+              </button>
+            )}
+          </div>
         </div>
       </aside>
 
@@ -495,6 +528,7 @@ export default function DashboardPage() {
         </div>
 
       </main>
+      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </div>
   );
 }

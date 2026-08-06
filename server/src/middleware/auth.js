@@ -88,6 +88,17 @@ export async function parseUser(req, res, next) {
       }
     }
 
+    // 3.5 Force Password Change Checks
+    if (user && user.mustChangePassword) {
+      const isAllowedRoute = req.originalUrl === '/api/auth/me' || req.originalUrl === '/api/auth/change-password' || req.originalUrl.startsWith('/api/support');
+      if (!isAllowedRoute) {
+        return res.status(403).json({
+          error: 'MUST_CHANGE_PASSWORD',
+          message: 'You must change your password immediately after logging in.'
+        });
+      }
+    }
+
     // 4. Strict Ban Checks
     if (user && user.isBanned) {
       // Allow only safe routes (like fetching auth status or using support chat)
@@ -95,7 +106,7 @@ export async function parseUser(req, res, next) {
       if (!isBannedSafeRoute) {
         return res.status(403).json({
           error: 'YOUR_IDENTITY_IS_BANNED',
-          message: user.banReason || 'Your anonymous identity has been permanently banned by an administrator.',
+          message: user.banReason || 'You have been banned from community interactions.\n\nIf you believe this is a mistake, contact the administrator.',
           banReason: user.banReason,
           bannedBy: user.bannedBy || 'Professor',
           banDate: user.banDate || user.updatedAt
@@ -116,6 +127,22 @@ export async function parseUser(req, res, next) {
 export function requireAuth(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: 'UNAUTHORIZED', message: 'You must have a valid anonymous identity.' });
+  }
+
+  // Check if banned
+  if (req.user.isBanned) {
+    return res.status(403).json({
+      error: 'YOUR_IDENTITY_IS_BANNED',
+      message: 'You have been banned from community interactions. If you believe this is a mistake, contact the administrator.'
+    });
+  }
+
+  // Check if must change password
+  if (req.user.mustChangePassword) {
+    return res.status(403).json({
+      error: 'MUST_CHANGE_PASSWORD',
+      message: 'You must change your password immediately after logging in.'
+    });
   }
   
   // Check if muted
