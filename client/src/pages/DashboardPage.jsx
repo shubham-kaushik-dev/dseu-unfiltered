@@ -17,10 +17,10 @@ const SupportChat = React.lazy(() => import('../components/SupportChat'));
 
 import { 
   MessageSquare, HeartHandshake, Image as ImageIcon, BarChart3, 
-  ShieldAlert, Megaphone, User as UserIcon, Volume2, VolumeX, Menu, X, Bell, RotateCcw, HelpCircle
+  ShieldAlert, Megaphone, User as UserIcon, Volume2, VolumeX, Menu, X, Bell, RotateCcw, HelpCircle, Shield
 } from 'lucide-react';
 
-export default function DashboardPage() {
+export default function DashboardPage({ onOpenRules }) {
   const { user, isBanned, openLoginModal, logout } = useContext(UserContext);
   const { socket, onlineCount, pinnedAnnouncement, setPinnedAnnouncement } = useContext(SocketContext);
   
@@ -175,6 +175,11 @@ export default function DashboardPage() {
 
   // Clear unread counts when user switches tabs
   const handleTabChange = (tab) => {
+    if (tab === 'rules') {
+      if (onOpenRules) onOpenRules();
+      setMobileMenuOpen(false);
+      return;
+    }
     setActiveTab(tab);
     setUnreadCounts(prev => ({ ...prev, [tab]: 0 }));
     setMobileMenuOpen(false);
@@ -232,6 +237,7 @@ export default function DashboardPage() {
     { id: 'memes', label: 'Meme Board', icon: ImageIcon },
     { id: 'polls', label: 'Campus Polls', icon: BarChart3 },
     ...((user?.isRegistered || user?.role === 'admin') ? [{ id: 'support', label: 'Contact Professor', icon: HelpCircle }] : []),
+    { id: 'rules', label: 'Rules & Regulations', icon: Shield },
     { id: 'admin', label: 'Admin Moderation', icon: ShieldAlert }
   ];
 

@@ -214,7 +214,7 @@ function AppContent() {
   // 3. Normal Flow
   return entered ? (
     <>
-      <DashboardPage />
+      <DashboardPage onOpenRules={() => setShowRules(true)} />
       <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} />
       <CommunityRulesModal isOpen={showRules} onAccept={handleAcceptRules} />
     </>
