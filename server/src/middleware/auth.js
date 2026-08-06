@@ -34,8 +34,12 @@ export async function parseUser(req, res, next) {
           browserToken: 'admin-token-fixed-value-2026',
           displayName: 'Professor (ADMIN)',
           role: 'admin',
+          isRegistered: true,
           campus: 'DSEU'
         });
+      } else if (!user.isRegistered) {
+        user.isRegistered = true;
+        await user.save();
       }
     } else {
       // 2. Extract standard token from custom header, standard auth header, or cookie

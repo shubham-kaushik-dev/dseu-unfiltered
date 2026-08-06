@@ -231,7 +231,7 @@ export default function DashboardPage() {
     { id: 'confessions', label: 'Confessions', icon: HeartHandshake },
     { id: 'memes', label: 'Meme Board', icon: ImageIcon },
     { id: 'polls', label: 'Campus Polls', icon: BarChart3 },
-    ...(user?.isRegistered ? [{ id: 'support', label: 'Contact Professor', icon: HelpCircle }] : []),
+    ...((user?.isRegistered || user?.role === 'admin') ? [{ id: 'support', label: 'Contact Professor', icon: HelpCircle }] : []),
     { id: 'admin', label: 'Admin Moderation', icon: ShieldAlert }
   ];
 
@@ -313,7 +313,7 @@ export default function DashboardPage() {
               <div className="flex flex-col leading-none overflow-hidden">
                 <span className="text-[14px] font-black text-slate-800 truncate">{user?.displayName}</span>
                 <span className="text-[9px] text-slate-400 font-bold tracking-wider mt-1.5 uppercase">
-                  {user?.isRegistered ? 'Registered User' : 'Visitor ID'}
+                  {(user?.isRegistered || user?.role === 'admin') ? 'Registered User' : 'Visitor ID'}
                 </span>
               </div>
             </div>
@@ -329,7 +329,7 @@ export default function DashboardPage() {
 
           {/* User Auth Actions */}
           <div className="flex gap-2">
-            {user?.isRegistered ? (
+            {(user?.isRegistered || user?.role === 'admin') ? (
               <>
                 <button
                   onClick={() => setShowProfileModal(true)}
