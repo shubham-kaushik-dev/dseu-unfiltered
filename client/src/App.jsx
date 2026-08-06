@@ -178,16 +178,12 @@ function AppContent() {
     );
   }
 
-  // 2.5. Render Community Rules Modal if not accepted
-  if (showRules) {
-    return <CommunityRulesModal isOpen={showRules} onAccept={() => setShowRules(false)} />;
-  }
-
   // 3. Normal Flow
   return entered ? (
     <>
       <DashboardPage />
       <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} />
+      <CommunityRulesModal isOpen={showRules} onAccept={() => setShowRules(false)} />
     </>
   ) : (
     <SplashScreen user={user} loading={loading} onComplete={() => setEntered(true)} />

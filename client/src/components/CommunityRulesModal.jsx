@@ -34,28 +34,28 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-hidden">
       {/* Modal Container */}
       <div 
-        className={`w-full max-w-[620px] bg-[#16181D] border border-[#2A2F3A] rounded-[12px] shadow-2xl flex flex-col max-h-[85vh] transition-opacity duration-200 select-none ${
+        className={`w-full max-w-[760px] bg-[#16181D] border border-[#2A2F3A] rounded-[12px] shadow-2xl flex flex-col max-h-[72vh] transition-opacity duration-200 overflow-hidden select-none ${
           animate ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        {/* Header */}
-        <div className="p-5 border-b border-[#2A2F3A] text-center shrink-0">
+        {/* Header (Fixed) */}
+        <div className="p-6 border-b border-[#2A2F3A] text-center shrink-0">
           <div className="mx-auto h-10 w-10 bg-purple-950/20 border border-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 mb-2">
             <Shield className="h-5 w-5" />
           </div>
-          <h2 className="text-lg font-bold text-white tracking-tight">
+          <h2 className="text-xl font-black text-white tracking-tight">
             Community Rules
           </h2>
-          <p className="text-xs text-zinc-400 font-semibold tracking-wide mt-0.5">
+          <p className="text-xs text-zinc-400 font-bold tracking-wide mt-1">
             Welcome to DSEU Unfiltered
           </p>
         </div>
 
-        {/* Rules Content */}
-        <div className="p-5 overflow-y-auto space-y-3.5 text-left divide-y divide-[#2A2F3A]/30 scrollbar-thin">
+        {/* Rules Content (Scrollable Only) */}
+        <div className="p-6 overflow-y-auto flex-1 space-y-5 text-left divide-y divide-[#2A2F3A]/30 scrollbar-thin">
           {[
             {
               num: 1,
@@ -108,28 +108,28 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
               desc: "The administrator may warn, mute, remove content, temporarily suspend or permanently ban accounts that violate these rules."
             }
           ].map((rule) => (
-            <div key={rule.num} className="pt-3.5 first:pt-0 flex gap-3 align-start">
-              <div className="h-5 w-5 bg-purple-950/20 border border-purple-500/20 rounded flex items-center justify-center text-purple-400 text-[10px] font-bold shrink-0">
+            <div key={rule.num} className="pt-4 first:pt-0 flex gap-4 items-start">
+              <div className="h-6 w-6 bg-purple-950/20 border border-purple-500/20 rounded flex items-center justify-center text-purple-400 text-xs font-black shrink-0">
                 {rule.num}
               </div>
-              <div className="space-y-0.5">
-                <h4 className="text-xs font-bold text-white tracking-wide">{rule.title}</h4>
-                <p className="text-[11px] text-zinc-400 leading-normal">{rule.desc}</p>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white tracking-wide">{rule.title}</h4>
+                <p className="text-[12px] text-zinc-200 leading-relaxed font-normal">{rule.desc}</p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Footer */}
-        <div className="p-5 border-t border-[#2A2F3A] bg-black/10 text-center shrink-0 space-y-3">
-          <p className="text-[10px] text-zinc-400 leading-normal max-w-lg mx-auto">
+        {/* Footer (Fixed containing Button) */}
+        <div className="p-6 border-t border-[#2A2F3A] bg-black/10 text-center shrink-0 space-y-4">
+          <p className="text-[11px] text-zinc-400 leading-relaxed max-w-2xl mx-auto font-medium">
             By using DSEU Unfiltered, you agree to follow these Community Rules. Repeated violations may result in warnings, content removal, temporary suspension or permanent bans.
           </p>
 
           <button
             type="button"
             onClick={handleAgree}
-            className="w-full max-w-[200px] py-2.5 px-5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition duration-150 cursor-pointer shadow-md inline-flex items-center justify-center"
+            className="w-full max-w-[220px] py-2.5 px-6 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black uppercase tracking-wider rounded-lg transition duration-150 cursor-pointer shadow-md inline-flex items-center justify-center"
           >
             I Agree
           </button>
