@@ -54,8 +54,11 @@ export function requireAdmin(req, res, next) {
     // Verify JWT
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
     
-    // Check if the decoded payload username matches
-    if (decoded.username !== (process.env.ADMIN_USERNAME || 'Kaushik')) {
+    // Check if the decoded payload username matches either super_admin or sub_admin
+    const superAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
+    const subAdminUsername = 'admin123';
+    
+    if (decoded.username !== superAdminUsername && decoded.username !== subAdminUsername) {
       return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'Invalid admin credentials.' });
     }
 
@@ -80,4 +83,14 @@ export function requireAdmin(req, res, next) {
     console.error('Admin Auth Error:', error);
     return res.status(401).json({ error: 'ADMIN_SESSION_EXPIRED', message: 'Session expired. Please log in again.' });
   }
+}
+
+export function requireSuperAdmin(req, res, next) {
+  if (!req.admin) {
+    return res.status(401).json({ error: 'ADMIN_UNAUTHORIZED', message: 'Unauthorized. Admin session missing.' });
+  }
+  if (req.admin.role !== 'super_admin') {
+    return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'ACCESS DENIED. Super Admin privileges required.' });
+  }
+  next();
 }

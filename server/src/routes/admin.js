@@ -8,6 +8,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import xlsx from 'xlsx';
 import { 
   requireAdmin, 
+  requireSuperAdmin,
   checkLoginLockout, 
   registerFailedAttempt, 
   clearFailedAttempts 
@@ -104,11 +105,13 @@ const upload = multer({
 });
 
 let hashedAdminPassword = '';
+let hashedSubAdminPassword = '';
 const adminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
 const adminPasswordRaw = process.env.ADMIN_PASSWORD || 'Ananya2608';
 
 const initAdminPassword = async () => {
   hashedAdminPassword = await bcrypt.hash(adminPasswordRaw, 10);
+  hashedSubAdminPassword = await bcrypt.hash('Kaushik2608', 10);
 };
 initAdminPassword();
 
@@ -129,11 +132,15 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'INVALID_INPUT', message: 'Username and password are required.' });
   }
 
-  const usernameMatch = username === adminUsername;
+  const isSuperAdmin = username === adminUsername;
+  const isSubAdmin = username === 'admin123';
+  const usernameMatch = isSuperAdmin || isSubAdmin;
   let passwordMatch = false;
 
-  if (usernameMatch) {
+  if (isSuperAdmin) {
     passwordMatch = await bcrypt.compare(password, hashedAdminPassword);
+  } else if (isSubAdmin) {
+    passwordMatch = await bcrypt.compare(password, hashedSubAdminPassword);
   }
 
   if (!usernameMatch || !passwordMatch) {
@@ -149,9 +156,11 @@ router.post('/login', async (req, res) => {
 
   clearFailedAttempts(ip);
 
+  const role = isSuperAdmin ? 'super_admin' : 'sub_admin';
+
   // 1. Log session in MongoDB
   const session = await AdminSession.create({
-    adminUsername,
+    adminUsername: username,
     loginTime: new Date(),
     browser: req.headers['user-agent'] || '',
     ip: ip
@@ -159,7 +168,7 @@ router.post('/login', async (req, res) => {
 
   const csrfToken = crypto.randomBytes(32).toString('hex');
   const token = jwt.sign(
-    { username: adminUsername, role: 'admin', csrfToken, sessionId: session._id },
+    { username, role, csrfToken, sessionId: session._id },
     process.env.JWT_SECRET || 'fallback_secret',
     { expiresIn: '1h' }
   );
@@ -168,22 +177,22 @@ router.post('/login', async (req, res) => {
 
   await AdminLog.create({
     action: 'ADMIN_LOGIN',
-    details: `Admin logged in from IP ${ip}`,
-    adminUsername
+    details: `Admin (${role}) logged in from IP ${ip}`,
+    adminUsername: username
   });
 
   const io = getIo(req);
   if (io) {
     io.to('admin').emit('moderation-activity', {
       type: 'admin_login',
-      text: `Administrator logged in from IP ${ip}`,
+      text: `Admin (${username}) logged in from IP ${ip}`,
       timestamp: new Date()
     });
     // Trigger stealth update
     io.emit('online-stealth-update');
   }
 
-  res.json({ message: 'Logged in successfully as administrator.', token, csrfToken });
+  res.json({ message: 'Logged in successfully as administrator.', token, csrfToken, role });
 });
 
 // POST /api/admin/logout
@@ -221,7 +230,7 @@ router.post('/logout', async (req, res) => {
 
 // GET /api/admin/check
 router.get('/check', requireAdmin, (req, res) => {
-  res.json({ username: req.admin.username, csrfToken: req.admin.csrfToken });
+  res.json({ username: req.admin.username, role: req.admin.role, csrfToken: req.admin.csrfToken });
 });
 
 // GET /api/admin/notifications/unread-counts
@@ -464,8 +473,14 @@ router.get('/users', requireAdmin, async (req, res) => {
       const pollCount = await Poll.countDocuments({ sender: u._id, status: { $ne: 'trash' } });
       const reportCount = await Report.countDocuments({ reporterToken: u.browserToken });
 
+      const uObj = u.toObject();
+      if (req.admin.role === 'sub_admin') {
+        uObj.realName = '[REDACTED]';
+        uObj.campus = '[REDACTED]';
+      }
+
       return {
-        ...u.toObject(),
+        ...uObj,
         chatCount,
         confessionCount,
         memeCount,
@@ -499,6 +514,11 @@ router.get('/user/:id/profile', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
     }
 
+    // Restriction check: sub_admin can only view profile if the user is banned
+    if (req.admin.role === 'sub_admin' && !userObj.isBanned) {
+      return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'ACCESS DENIED. Super Admin privileges required.' });
+    }
+
     const chats = await LiveChatMessage.find({ sender: id, status: { $ne: 'trash' } }).sort({ createdAt: -1 });
     const confessions = await Confession.find({ sender: id, status: { $ne: 'trash' } }).sort({ createdAt: -1 });
     const memes = await Meme.find({ sender: id, status: { $ne: 'trash' } }).sort({ createdAt: -1 });
@@ -506,8 +526,14 @@ router.get('/user/:id/profile', requireAdmin, async (req, res) => {
     const reports = await Report.find({ reporterToken: userObj.browserToken }).sort({ createdAt: -1 });
     const logs = await AdminLog.find({ details: { $regex: userObj.displayName, $options: 'i' } }).sort({ createdAt: -1 });
 
+    const profileObj = userObj.toObject();
+    if (req.admin.role === 'sub_admin') {
+      profileObj.realName = '[REDACTED]';
+      profileObj.campus = '[REDACTED]';
+    }
+
     res.json({
-      profile: userObj,
+      profile: profileObj,
       chats,
       confessions,
       memes,
@@ -681,6 +707,7 @@ router.post('/user/bulk-action', requireAdmin, async (req, res) => {
 
           if (io) {
             io.emit('user-banned-alert', user.browserToken);
+            io.to('admin').emit('user-ban-status-updated', { userId: user._id, isBanned: true });
           }
         } else if (action === 'unban') {
           user.isBanned = false;
@@ -694,6 +721,7 @@ router.post('/user/bulk-action', requireAdmin, async (req, res) => {
 
           if (io) {
             io.emit('user-unbanned-alert', user.browserToken);
+            io.to('admin').emit('user-ban-status-updated', { userId: user._id, isBanned: false });
           }
         } else if (action === 'mute') {
           const mins = parseInt(durationMinutes) || 60;
@@ -782,6 +810,7 @@ router.post('/users/:id/:action', requireAdmin, async (req, res) => {
         io.emit('user-banned-alert', user.browserToken);
         io.emit('online-stealth-update');
         io.emit('online-count', await getOnlineCount(req));
+        io.to('admin').emit('user-ban-status-updated', { userId: user._id, isBanned: true });
       }
     } else if (action === 'unban') {
       user.isBanned = false;
@@ -797,6 +826,7 @@ router.post('/users/:id/:action', requireAdmin, async (req, res) => {
         io.emit('user-unbanned-alert', user.browserToken);
         io.emit('online-stealth-update');
         io.emit('online-count', await getOnlineCount(req));
+        io.to('admin').emit('user-ban-status-updated', { userId: user._id, isBanned: false });
       }
     }
 
@@ -1548,6 +1578,7 @@ router.post('/report/:id/action', requireAdmin, async (req, res) => {
 
           if (io) {
             io.emit('user-banned-alert', targetUserToken);
+            io.to('admin').emit('user-ban-status-updated', { userId: userObj._id, isBanned: true });
           }
           logDetail = `Banned creator of reported content (DisplayName: ${userObj.displayName}) and resolved report ${id}`;
         }
@@ -1623,7 +1654,7 @@ router.post('/report/:id/action', requireAdmin, async (req, res) => {
 });
 
 // GET /api/admin/registered-users
-router.get('/registered-users', requireAdmin, async (req, res) => {
+router.get('/registered-users', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
@@ -1674,8 +1705,90 @@ router.get('/registered-users', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/banned-users
+router.get('/banned-users', requireAdmin, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const campusFilter = req.query.campusFilter || '';
+    const filter = req.query.filter || 'all'; // 'all', 'pending', 'replied', 'permanent'
+    const sortBy = req.query.sortBy || 'banDate';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+
+    const query = { isBanned: true };
+
+    if (search) {
+      query.$or = [
+        { displayName: { $regex: search, $options: 'i' } },
+        { realName: { $regex: search, $options: 'i' } },
+        { campus: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (campusFilter) {
+      query.campus = campusFilter;
+    }
+
+    let users = await User.find(query);
+
+    const processedUsers = [];
+    for (const u of users) {
+      const lastMsg = await SupportMessage.findOne({ browserToken: u.browserToken }).sort({ createdAt: -1 });
+      
+      let appealStatus = 'None';
+      if (lastMsg) {
+        appealStatus = lastMsg.senderType === 'user' ? 'Pending' : 'Replied';
+      }
+
+      if (filter === 'pending' && appealStatus !== 'Pending') continue;
+      if (filter === 'replied' && appealStatus !== 'Replied') continue;
+
+      const warningCount = u.warnings ? u.warnings.length : 0;
+
+      const uObj = u.toObject();
+      if (req.admin.role === 'sub_admin') {
+        uObj.realName = '[REDACTED]';
+        uObj.campus = '[REDACTED]';
+      }
+
+      processedUsers.push({
+        ...uObj,
+        appealStatus,
+        warningCount
+      });
+    }
+
+    processedUsers.sort((a, b) => {
+      let valA = a[sortBy];
+      let valB = b[sortBy];
+      if (valA instanceof Date) valA = valA.getTime();
+      if (valB instanceof Date) valB = valB.getTime();
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+      
+      if (valA < valB) return -1 * sortOrder;
+      if (valA > valB) return 1 * sortOrder;
+      return 0;
+    });
+
+    const total = processedUsers.length;
+    const paginatedUsers = processedUsers.slice((page - 1) * limit, page * limit);
+
+    res.json({
+      users: paginatedUsers,
+      total,
+      page,
+      pages: Math.ceil(total / limit)
+    });
+  } catch (err) {
+    console.error('Error fetching banned users:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to fetch banned users.' });
+  }
+});
+
 // GET /api/admin/registered-users/:id/details
-router.get('/registered-users/:id/details', requireAdmin, async (req, res) => {
+router.get('/registered-users/:id/details', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const userId = req.params.id;
     const user = await User.findById(userId);
@@ -1704,7 +1817,7 @@ router.get('/registered-users/:id/details', requireAdmin, async (req, res) => {
 });
 
 // GET /api/admin/export-users
-router.get('/export-users', requireAdmin, async (req, res) => {
+router.get('/export-users', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const users = await User.find({ isRegistered: true }).sort({ registrationDate: -1 });
 
@@ -1753,6 +1866,11 @@ router.delete('/registered-users/:id', requireAdmin, async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Restriction check: sub_admin can only delete user if the user is banned
+    if (req.admin.role === 'sub_admin' && !user.isBanned) {
+      return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'ACCESS DENIED. Super Admin privileges required.' });
     }
 
     await User.findByIdAndDelete(req.params.id);

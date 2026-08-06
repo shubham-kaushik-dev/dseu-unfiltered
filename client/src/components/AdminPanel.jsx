@@ -83,7 +83,20 @@ export default function AdminPanel({ onAdminStateChange }) {
   const [selectedRegUser, setSelectedRegUser] = useState(null);
   const [regUserDetails, setRegUserDetails] = useState(null);
   const [regUserDetailsLoading, setRegUserDetailsLoading] = useState(false);
-
+  // Banned Users State
+  const [bannedUsers, setBannedUsers] = useState([]);
+  const [bannedTotal, setBannedTotal] = useState(0);
+  const [bannedPage, setBannedPage] = useState(1);
+  const [bannedPages, setBannedPages] = useState(1);
+  const [bannedSearch, setBannedSearch] = useState('');
+  const [bannedCampus, setBannedCampus] = useState('');
+  const [bannedFilter, setBannedFilter] = useState('all'); // 'all', 'pending', 'replied', 'permanent'
+  const [bannedSortBy, setBannedSortBy] = useState('banDate');
+  const [bannedSortOrder, setBannedSortOrder] = useState('desc');
+  const [bannedLoading, setBannedLoading] = useState(false);
+  const [selectedBannedUser, setSelectedBannedUser] = useState(null);
+  const [bannedUserDetails, setBannedUserDetails] = useState(null);
+  const [bannedUserDetailsLoading, setBannedUserDetailsLoading] = useState(false);
   // Password Reset Requests State
   const [resetRequests, setResetRequests] = useState([]);
   const [resetsLoading, setResetsLoading] = useState(false);
@@ -139,6 +152,8 @@ export default function AdminPanel({ onAdminStateChange }) {
   });
   const [settingsLoading, setSettingsLoading] = useState(false);
 
+  const [adminRole, setAdminRole] = useState(() => localStorage.getItem('dseu_admin_role') || 'super_admin');
+
   // Trash Bin State
   const [trashItems, setTrashItems] = useState({ messages: [], confessions: [], memes: [], polls: [] });
   const [trashLoading, setTrashLoading] = useState(false);
@@ -186,6 +201,9 @@ export default function AdminPanel({ onAdminStateChange }) {
           const check = await res.json();
           setCsrfToken(check.csrfToken);
           setAdminCsrfToken(check.csrfToken);
+          const role = check.role || 'super_admin';
+          setAdminRole(role);
+          localStorage.setItem('dseu_admin_role', role);
           setAdminLoggedIn(true);
           onAdminStateChange(true);
         }
@@ -200,6 +218,7 @@ export default function AdminPanel({ onAdminStateChange }) {
     if (activeTab === 'analytics') fetchStats();
     else if (activeTab === 'users') fetchUsers();
     else if (activeTab === 'registered') fetchRegUsers();
+    else if (activeTab === 'banned') fetchBannedUsers();
     else if (activeTab === 'resets') fetchResetRequests();
     else if (activeTab === 'reports') fetchReports();
     else if (activeTab === 'support') fetchConversations();
@@ -208,7 +227,7 @@ export default function AdminPanel({ onAdminStateChange }) {
     else if (activeTab === 'history') fetchSessions();
     else if (activeTab === 'announcements') fetchAnnouncementsHistory();
     else if (activeTab === 'logs') fetchAuditLogs();
-  }, [activeTab, adminLoggedIn, usersPage, usersFilter, usersSort, supportPage, supportFilter, announcementPage, announcementFilter, regPage, regCampus, regBan, regSortBy, regSortOrder]);
+  }, [activeTab, adminLoggedIn, usersPage, usersFilter, usersSort, supportPage, supportFilter, announcementPage, announcementFilter, regPage, regCampus, regBan, regSortBy, regSortOrder, bannedPage, bannedSearch, bannedCampus, bannedFilter, bannedSortBy, bannedSortOrder]);
 
   // Handle notification marking as read when entering sections
   useEffect(() => {
@@ -250,6 +269,16 @@ export default function AdminPanel({ onAdminStateChange }) {
     }, 400);
     return () => clearTimeout(timer);
   }, [regSearch]);
+
+  // Sync banned users list whenever search query changes (debounced)
+  useEffect(() => {
+    if (!adminLoggedIn || activeTab !== 'banned') return;
+    const timer = setTimeout(() => {
+      setBannedPage(1);
+      fetchBannedUsers();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [bannedSearch]);
 
   // Debounce search inside support
   useEffect(() => {
@@ -325,6 +354,12 @@ export default function AdminPanel({ onAdminStateChange }) {
       fetchUnreadCounts();
     });
 
+    socket.on('user-ban-status-updated', () => {
+      fetchUsers();
+      fetchRegUsers();
+      fetchBannedUsers();
+    });
+
     return () => {
       socket.off('admin-stats-update');
       socket.off('moderation-activity');
@@ -333,6 +368,7 @@ export default function AdminPanel({ onAdminStateChange }) {
       socket.off('support-messages-seen');
       socket.off('new-user-registered');
       socket.off('admin-notifications-updated');
+      socket.off('user-ban-status-updated');
     };
   }, [socket, adminLoggedIn, selectedConversationToken, csrfToken]);
 
@@ -360,6 +396,9 @@ export default function AdminPanel({ onAdminStateChange }) {
         setCsrfToken(data.csrfToken);
         setAdminCsrfToken(data.csrfToken);
         setAdminJwt(data.token);
+        const role = data.role || 'super_admin';
+        setAdminRole(role);
+        localStorage.setItem('dseu_admin_role', role);
         setAdminLoggedIn(true);
         onAdminStateChange(true);
         showToast('Successfully logged in as administrator.', 'success');
@@ -387,6 +426,8 @@ export default function AdminPanel({ onAdminStateChange }) {
       setAdminCsrfToken('');
       setCsrfToken('');
       setAdminJwt('');
+      setAdminRole('super_admin');
+      localStorage.removeItem('dseu_admin_role');
       setAdminLoggedIn(false);
       onAdminStateChange(false);
       setUsernameInput('');
@@ -485,6 +526,54 @@ export default function AdminPanel({ onAdminStateChange }) {
     }
   };
 
+  const fetchBannedUsers = async () => {
+    try {
+      setBannedLoading(true);
+      const query = new URLSearchParams({
+        page: bannedPage,
+        search: bannedSearch,
+        campusFilter: bannedCampus,
+        filter: bannedFilter,
+        sortBy: bannedSortBy,
+        sortOrder: bannedSortOrder
+      });
+      const response = await adminFetch(`/api/admin/banned-users?${query.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setBannedUsers(data.users);
+        setBannedTotal(data.total);
+        setBannedPages(data.pages);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showToast(err.message || 'Failed to fetch banned users.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error connecting to banned users API.', 'error');
+    } finally {
+      setBannedLoading(false);
+    }
+  };
+
+  const fetchBannedUserDetails = async (userId) => {
+    try {
+      setBannedUserDetailsLoading(true);
+      const response = await adminFetch(`/api/admin/user/${userId}/profile`);
+      if (response.ok) {
+        const data = await response.json();
+        setBannedUserDetails(data);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showToast(err.message || 'Failed to fetch banned user details.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error connecting to user profile details API.', 'error');
+    } finally {
+      setBannedUserDetailsLoading(false);
+    }
+  };
+
   const fetchResetRequests = async () => {
     try {
       setResetsLoading(true);
@@ -536,7 +625,10 @@ export default function AdminPanel({ onAdminStateChange }) {
         showToast('User account deleted successfully.', 'success');
         setSelectedRegUser(null);
         setRegUserDetails(null);
+        setSelectedBannedUser(null);
+        setBannedUserDetails(null);
         fetchRegUsers();
+        fetchBannedUsers();
       } else {
         const err = await response.json().catch(() => ({}));
         showToast(err.message || 'Failed to delete account.', 'error');
@@ -1082,7 +1174,8 @@ export default function AdminPanel({ onAdminStateChange }) {
         {[
           { id: 'analytics', label: 'Dashboard', icon: ShieldCheck },
           { id: 'users', label: 'Directory', icon: Users },
-          { id: 'registered', label: 'Registered Users', icon: Users },
+          ...(adminRole !== 'sub_admin' ? [{ id: 'registered', label: 'Registered Users', icon: Users }] : []),
+          { id: 'banned', label: 'Banned Users', icon: Ban },
           { id: 'resets', label: 'Reset Requests', icon: KeyRound },
           { id: 'reports', label: 'Reports', icon: AlertTriangle },
           { id: 'support', label: 'Support Inbox', icon: Send },
@@ -1329,6 +1422,163 @@ export default function AdminPanel({ onAdminStateChange }) {
           </div>
         )}
 
+        {/* Tab 3.5: Banned Users List */}
+        {activeTab === 'banned' && (
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Banned Users</h2>
+              
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Search name, campus..."
+                    value={bannedSearch}
+                    onChange={(e) => setBannedSearch(e.target.value)}
+                    className="bg-[#161922] border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-600 transition"
+                  />
+                </div>
+
+                {/* Campus Filter */}
+                <input
+                  type="text"
+                  placeholder="Filter Campus..."
+                  value={bannedCampus}
+                  onChange={(e) => setBannedCampus(e.target.value)}
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-600 transition"
+                />
+
+                {/* Appeal Filter */}
+                <select
+                  value={bannedFilter}
+                  onChange={(e) => setBannedFilter(e.target.value)}
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none cursor-pointer focus:border-purple-600 transition"
+                >
+                  <option value="all">All Appeal Statuses</option>
+                  <option value="pending">Appeal Pending</option>
+                  <option value="replied">Appeal Replied</option>
+                </select>
+
+                {/* Sort By */}
+                <select
+                  value={bannedSortBy}
+                  onChange={(e) => setBannedSortBy(e.target.value)}
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none cursor-pointer focus:border-purple-600 transition"
+                >
+                  <option value="banDate">Ban Date</option>
+                  <option value="displayName">Anonymous Username</option>
+                  <option value="realName">Real Name</option>
+                  <option value="campus">Campus</option>
+                  <option value="lastActive">Last Seen</option>
+                </select>
+
+                {/* Sort Order */}
+                <select
+                  value={bannedSortOrder}
+                  onChange={(e) => setBannedSortOrder(e.target.value)}
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none cursor-pointer focus:border-purple-600 transition"
+                >
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Grid/Table List */}
+            {bannedLoading ? (
+              <p className="text-slate-400 font-medium select-none">Fetching banned users list...</p>
+            ) : bannedUsers.length === 0 ? (
+              <p className="text-slate-500 font-medium select-none">No banned users matched current filters.</p>
+            ) : (
+              <div className="overflow-x-auto border border-slate-800/80 rounded-2xl shadow-2xl bg-[#161922] max-h-[600px] overflow-y-auto">
+                <table className="w-full text-left text-xs border-collapse relative">
+                  <thead>
+                    <tr className="bg-[#161922] border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider select-none sticky top-0 z-10 shadow-sm">
+                      <th className="p-4 bg-[#161922]">Anonymous Username</th>
+                      <th className="p-4 bg-[#161922]">Real Name</th>
+                      <th className="p-4 bg-[#161922]">Campus</th>
+                      <th className="p-4 bg-[#161922]">Ban Reason</th>
+                      <th className="p-4 bg-[#161922]">Banned By</th>
+                      <th className="p-4 bg-[#161922]">Ban Date</th>
+                      <th className="p-4 bg-[#161922]">Last Seen</th>
+                      <th className="p-4 bg-[#161922]">Appeal Status</th>
+                      <th className="p-4 text-center bg-[#161922]">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bannedUsers.map((u, index) => (
+                      <tr 
+                        key={u._id} 
+                        onClick={() => {
+                          setSelectedBannedUser(u);
+                          fetchBannedUserDetails(u._id);
+                        }}
+                        className={`${
+                          index % 2 === 0 ? 'bg-[#181B26]' : 'bg-[#1D202F]/40'
+                        } border-b border-slate-800/60 hover:bg-purple-950/20 text-slate-300 font-semibold cursor-pointer transition select-none`}
+                      >
+                        <td className="p-4 text-purple-400 font-bold">@{u.displayName}</td>
+                        <td className="p-4 text-white font-bold">{u.realName}</td>
+                        <td className="p-4 text-slate-300">{u.campus}</td>
+                        <td className="p-4 text-slate-400 max-w-[150px] truncate">{u.banReason || 'N/A'}</td>
+                        <td className="p-4 text-slate-450">{u.bannedBy || 'System'}</td>
+                        <td className="p-4 text-slate-400">{u.banDate ? new Date(u.banDate).toLocaleDateString() : 'N/A'}</td>
+                        <td className="p-4 text-slate-450">{u.lastActive ? new Date(u.lastActive).toLocaleDateString() : 'Offline'}</td>
+                        <td className="p-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                            u.appealStatus === 'Pending' ? 'bg-amber-950/40 text-amber-400 border border-amber-900/30' :
+                            u.appealStatus === 'Replied' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' :
+                            'bg-zinc-950/40 text-zinc-500 border border-zinc-900/30'
+                          }`}>
+                            {u.appealStatus}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleOpenSupportChat(u.browserToken)}
+                            className="px-2.5 py-1 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-900/40 text-purple-400 text-[10px] font-black uppercase rounded-lg cursor-pointer transition"
+                          >
+                            DM
+                          </button>
+                          <button
+                            onClick={() => handleUnbanUser(u._id)}
+                            className="px-2.5 py-1 bg-emerald-950/40 hover:bg-emerald-900/40 border border-emerald-900/40 text-emerald-400 text-[10px] font-black uppercase rounded-lg cursor-pointer transition"
+                          >
+                            Unban
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {bannedPages > 1 && (
+              <div className="flex items-center justify-between text-xs font-bold text-slate-400 pt-2 select-none">
+                <button
+                  disabled={bannedPage === 1}
+                  onClick={() => setBannedPage(p => Math.max(1, p - 1))}
+                  className="px-4 py-2 bg-[#161922] hover:bg-slate-800 border border-slate-800/80 rounded-xl disabled:opacity-40 cursor-pointer text-slate-300 font-bold transition"
+                >
+                  Prev
+                </button>
+                <span className="font-semibold text-slate-450">Page {bannedPage} of {bannedPages}</span>
+                <button
+                  disabled={bannedPage === bannedPages}
+                  onClick={() => setBannedPage(p => Math.min(bannedPages, p + 1))}
+                  className="px-4 py-2 bg-[#161922] hover:bg-slate-800 border border-slate-800/80 rounded-xl disabled:opacity-40 cursor-pointer text-slate-300 font-bold transition"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tab 4: Password Reset Requests */}
         {activeTab === 'resets' && (
           <div className="space-y-6">
@@ -1554,6 +1804,132 @@ export default function AdminPanel({ onAdminStateChange }) {
           </div>
         )}
 
+        {selectedBannedUser && (
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] select-none">
+            <div className="relative max-w-lg w-full bg-[#0e0f14] border border-zinc-800 rounded-[24px] p-6 shadow-2xl space-y-6">
+              {/* Close Button */}
+              <button
+                onClick={() => { setSelectedBannedUser(null); setBannedUserDetails(null); }}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 cursor-pointer font-bold font-mono p-1"
+              >
+                ✕
+              </button>
+
+              <div className="space-y-1.5 text-center">
+                <h3 className="text-xl font-bold uppercase text-white tracking-wide">Banned User Details</h3>
+                <p className="text-purple-400 font-bold text-sm">@{selectedBannedUser.displayName}</p>
+              </div>
+
+              {bannedUserDetailsLoading ? (
+                <p className="text-zinc-500 text-center py-8 font-medium">Fetching detailed statistics...</p>
+              ) : bannedUserDetails ? (
+                <div className="space-y-5">
+                  {/* Private Metadata Grid */}
+                  <div className="grid grid-cols-2 gap-4 bg-zinc-950/40 p-4 border border-zinc-850 rounded-2xl text-xs text-zinc-400">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Real Name</span>
+                      <span className="text-sm font-black text-white mt-1 block">{bannedUserDetails.profile.realName || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Campus</span>
+                      <span className="text-sm font-semibold text-white mt-1 block">{bannedUserDetails.profile.campus || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Registration Date</span>
+                      <span className="font-medium text-white mt-1 block">
+                        {bannedUserDetails.profile.registrationDate ? new Date(bannedUserDetails.profile.registrationDate).toLocaleDateString() : 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Last Login</span>
+                      <span className="font-medium text-white mt-1 block">
+                        {bannedUserDetails.profile.lastLogin ? new Date(bannedUserDetails.profile.lastLogin).toLocaleDateString() : 'Never'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Last Seen</span>
+                      <span className="font-medium text-white mt-1 block">
+                        {bannedUserDetails.profile.lastActive ? new Date(bannedUserDetails.profile.lastActive).toLocaleDateString() : 'Offline'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Ban Date</span>
+                      <span className="font-medium text-white mt-1 block">
+                        {bannedUserDetails.profile.banDate ? new Date(bannedUserDetails.profile.banDate).toLocaleDateString() : 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Banned By</span>
+                      <span className="font-medium text-white mt-1 block">
+                        {bannedUserDetails.profile.bannedBy || 'System'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Ban Reason</span>
+                      <span className="font-medium text-white mt-1 block">
+                        {bannedUserDetails.profile.banReason || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Activity Stats Grid */}
+                  <div className="grid grid-cols-5 gap-3 text-center">
+                    {[
+                      { label: 'Warnings', value: bannedUserDetails.profile.warnings ? bannedUserDetails.profile.warnings.length : 0, color: 'text-amber-400' },
+                      { label: 'Messages', value: bannedUserDetails.chats.length, color: 'text-white' },
+                      { label: 'Confessions', value: bannedUserDetails.confessions.length, color: 'text-white' },
+                      { label: 'Memes', value: bannedUserDetails.memes.length, color: 'text-white' },
+                      { label: 'Polls', value: bannedUserDetails.polls.length, color: 'text-white' }
+                    ].map((stat, i) => (
+                      <div key={i} className="p-3 bg-[#0e0f14] border border-zinc-850 rounded-xl">
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider block leading-none">{stat.label}</span>
+                        <span className={`text-lg font-black mt-1 block leading-none ${stat.color}`}>{stat.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Action Triggers */}
+                  <div className="flex flex-wrap gap-3.5 pt-3 border-t border-zinc-850">
+                    {/* Unban User */}
+                    <button
+                      onClick={() => {
+                        handleUnbanUser(bannedUserDetails.profile._id);
+                        setSelectedBannedUser(null);
+                        setBannedUserDetails(null);
+                      }}
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-550 text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer text-center shadow-lg shadow-emerald-500/10 transition"
+                    >
+                      Unban User
+                    </button>
+
+                    {/* Send Message */}
+                    <button
+                      onClick={() => {
+                        handleOpenSupportChat(bannedUserDetails.profile.browserToken);
+                        setSelectedBannedUser(null);
+                        setBannedUserDetails(null);
+                      }}
+                      className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-550 text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer text-center shadow-lg shadow-purple-500/10 transition"
+                    >
+                      Send Message
+                    </button>
+
+                    {/* Delete Account */}
+                    <button
+                      onClick={() => handleDeleteAccount(bannedUserDetails.profile._id)}
+                      className="w-full py-2.5 bg-red-950/40 hover:bg-red-900/30 text-red-400 font-bold text-xs uppercase tracking-wider rounded-xl border border-red-900/30 cursor-pointer text-center transition"
+                    >
+                      Delete Account
+                    </button>
+                  </div>
+
+                </div>
+              ) : null}
+
+            </div>
+          </div>
+        )}
+
         {/* Tab 2: User Directory */}
         {activeTab === 'users' && (
           <div className="space-y-6">
@@ -1689,12 +2065,14 @@ export default function AdminPanel({ onAdminStateChange }) {
                             ) : '-'}
                           </td>
                           <td className="p-4 text-center">
-                            <button
-                              onClick={() => handleOpenUserDrawer(u._id)}
-                              className="px-3 py-1.5 bg-[#1e2230] hover:bg-[#2c3147] text-slate-300 hover:text-white rounded-xl border border-slate-800 cursor-pointer text-xs transition"
-                            >
-                              Oversight Profile
-                            </button>
+                            {(adminRole !== 'sub_admin' || u.isBanned) && (
+                              <button
+                                onClick={() => handleOpenUserDrawer(u._id)}
+                                className="px-3 py-1.5 bg-[#1e2230] hover:bg-[#2c3147] text-slate-300 hover:text-white rounded-xl border border-slate-800 cursor-pointer text-xs transition"
+                              >
+                                Oversight Profile
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))

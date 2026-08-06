@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Shield, Sparkles } from 'lucide-react';
+import { Shield } from 'lucide-react';
 
 const RULES_VERSION = '1.0';
 
@@ -8,7 +8,6 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
 
   useEffect(() => {
     if (isOpen) {
-      // Trigger smooth fade + scale animation
       const timer = setTimeout(() => setAnimate(true), 50);
       return () => clearTimeout(timer);
     } else {
@@ -16,7 +15,6 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
     }
   }, [isOpen]);
 
-  // Intercept Escape key to prevent closing
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (isOpen && e.key === 'Escape') {
@@ -36,31 +34,28 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
       {/* Modal Container */}
       <div 
-        className={`w-full max-w-[680px] bg-[#111111] border border-purple-600/50 rounded-[20px] shadow-[0_0_50px_rgba(139,92,246,0.15)] flex flex-col max-h-[90vh] transition-all duration-300 transform select-none ${
-          animate ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+        className={`w-full max-w-[620px] bg-[#16181D] border border-[#2A2F3A] rounded-[12px] shadow-2xl flex flex-col max-h-[85vh] transition-opacity duration-200 select-none ${
+          animate ? 'opacity-100' : 'opacity-0'
         }`}
       >
         {/* Header */}
-        <div className="p-6 border-b border-zinc-800/80 text-center relative shrink-0">
-          <div className="mx-auto h-12 w-12 bg-purple-950/40 border border-purple-500/30 rounded-2xl flex items-center justify-center text-purple-400 mb-3 shadow-[0_0_15px_rgba(139,92,246,0.1)]">
-            <Shield className="h-6 w-6" />
+        <div className="p-5 border-b border-[#2A2F3A] text-center shrink-0">
+          <div className="mx-auto h-10 w-10 bg-purple-950/20 border border-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 mb-2">
+            <Shield className="h-5 w-5" />
           </div>
-          <h2 className="text-xl font-black text-white uppercase tracking-tight">
+          <h2 className="text-lg font-bold text-white tracking-tight">
             Community Rules
           </h2>
-          <p className="text-sm font-black text-purple-400 uppercase tracking-widest mt-1">
+          <p className="text-xs text-zinc-400 font-semibold tracking-wide mt-0.5">
             Welcome to DSEU Unfiltered
-          </p>
-          <p className="text-xs text-zinc-400 mt-2 font-medium">
-            Please read and agree to the following rules before continuing.
           </p>
         </div>
 
         {/* Rules Content */}
-        <div className="p-6 overflow-y-auto space-y-4 text-left divide-y divide-zinc-900">
+        <div className="p-5 overflow-y-auto space-y-3.5 text-left divide-y divide-[#2A2F3A]/30 scrollbar-thin">
           {[
             {
               num: 1,
@@ -113,31 +108,30 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
               desc: "The administrator may warn, mute, remove content, temporarily suspend or permanently ban accounts that violate these rules."
             }
           ].map((rule) => (
-            <div key={rule.num} className={`pt-3 first:pt-0 flex gap-3.5`}>
-              <div className="h-6 w-6 bg-purple-950/30 border border-purple-500/20 rounded-lg flex items-center justify-center text-purple-400 text-xs font-black shrink-0">
+            <div key={rule.num} className="pt-3.5 first:pt-0 flex gap-3 align-start">
+              <div className="h-5 w-5 bg-purple-950/20 border border-purple-500/20 rounded flex items-center justify-center text-purple-400 text-[10px] font-bold shrink-0">
                 {rule.num}
               </div>
               <div className="space-y-0.5">
-                <h4 className="text-xs font-black uppercase text-zinc-150 tracking-wide">{rule.title}</h4>
-                <p className="text-[11px] text-zinc-400 leading-relaxed font-medium">{rule.desc}</p>
+                <h4 className="text-xs font-bold text-white tracking-wide">{rule.title}</h4>
+                <p className="text-[11px] text-zinc-400 leading-normal">{rule.desc}</p>
               </div>
             </div>
           ))}
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-zinc-800/80 bg-zinc-950/20 text-center shrink-0 space-y-4">
-          <p className="text-[10px] text-zinc-550 leading-relaxed font-semibold max-w-lg mx-auto">
+        <div className="p-5 border-t border-[#2A2F3A] bg-black/10 text-center shrink-0 space-y-3">
+          <p className="text-[10px] text-zinc-400 leading-normal max-w-lg mx-auto">
             By using DSEU Unfiltered, you agree to follow these Community Rules. Repeated violations may result in warnings, content removal, temporary suspension or permanent bans.
           </p>
 
           <button
             type="button"
             onClick={handleAgree}
-            className="w-full max-w-xs py-3 px-6 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition duration-200 cursor-pointer shadow-lg shadow-purple-900/20 hover:scale-[1.02] active:scale-[0.98] inline-flex items-center justify-center gap-2"
+            className="w-full max-w-[200px] py-2.5 px-5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition duration-150 cursor-pointer shadow-md inline-flex items-center justify-center"
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>I Agree</span>
+            I Agree
           </button>
         </div>
       </div>

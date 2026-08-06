@@ -15,8 +15,11 @@ export async function parseUser(req, res, next) {
 
     if (adminToken) {
       try {
-        const decoded = jwt.verify(adminToken, process.env.JWT_SECRET || 'fallback_secret');
-        if (decoded && decoded.username === (process.env.ADMIN_USERNAME || 'Kaushik') && decoded.role === 'admin') {
+        const superAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
+        const subAdminUsername = 'admin123';
+        if (decoded && 
+            (decoded.username === superAdminUsername || decoded.username === subAdminUsername) && 
+            (decoded.role === 'super_admin' || decoded.role === 'sub_admin')) {
           isAdmin = true;
         }
       } catch (err) {
