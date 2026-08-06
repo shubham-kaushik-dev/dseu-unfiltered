@@ -1541,6 +1541,11 @@ router.post('/report/:id/action', requireAdmin, async (req, res) => {
           userObj.bannedBy = 'Professor';
           userObj.banDate = new Date();
           await userObj.save();
+
+          const reasonText = banReason || 'Reported content violation';
+          const banMsg = `🚫 Your account has been banned.\n\nReason:\n${reasonText}\n\nIf you believe this is a mistake, you can reply here to appeal your ban.`;
+          await sendSystemSupportMessage(targetUserToken, banMsg, req);
+
           if (io) {
             io.emit('user-banned-alert', targetUserToken);
           }

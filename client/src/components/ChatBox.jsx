@@ -96,7 +96,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
 
     fetchChatHistory();
     fetchSettingsAndPinned();
-  }, []);
+  }, [user]);
 
   // Socket event listeners
   useEffect(() => {

@@ -52,7 +52,7 @@ const upload = multer({
 // GET /api/memes - Get all memes (sorted by newest)
 router.get('/', parseUser, async (req, res) => {
   try {
-    const memes = await Meme.find({ campus: req.user?.campus || 'DSEU', status: { $ne: 'trash' } })
+    const memes = await Meme.find({ status: { $ne: 'trash' } })
       .populate('sender', 'displayName')
       .populate('comments.sender', 'displayName')
       .sort({ createdAt: -1 });

@@ -11,7 +11,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
 export default function MemesBoard({ isAdmin }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
-  const { adminCsrfToken, adminFetch } = useContext(UserContext);
+  const { adminCsrfToken, adminFetch, user } = useContext(UserContext);
   const [memes, setMemes] = useState([]);
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -37,7 +37,7 @@ export default function MemesBoard({ isAdmin }) {
 
   useEffect(() => {
     fetchMemes();
-  }, []);
+  }, [user]);
 
   // Listen to socket.io events
   useEffect(() => {

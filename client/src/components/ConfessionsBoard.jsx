@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
 export default function ConfessionsBoard({ isAdmin }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
-  const { adminCsrfToken, adminFetch } = useContext(UserContext);
+  const { adminCsrfToken, adminFetch, user } = useContext(UserContext);
   const [confessions, setConfessions] = useState([]);
   const [newConfessionText, setNewConfessionText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -34,7 +34,7 @@ export default function ConfessionsBoard({ isAdmin }) {
 
   useEffect(() => {
     fetchConfessions();
-  }, []);
+  }, [user]);
 
   // Listen for real-time WebSocket events
   useEffect(() => {

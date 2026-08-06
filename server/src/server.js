@@ -119,7 +119,7 @@ app.use('/api/support', supportRouter);
 app.get('/api/chat', parseUser, async (req, res) => {
   try {
     const isUserAdmin = req.user?.role === 'admin';
-    const query = { campus: req.user?.campus || 'DSEU', status: { $ne: 'trash' } };
+    const query = { status: { $ne: 'trash' } };
 
     if (!isUserAdmin) {
       // Filter out shadow-banned messages unless sent by the user

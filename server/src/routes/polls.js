@@ -9,7 +9,7 @@ const getIo = (req) => req.app.get('io');
 // GET /api/polls - Get all active polls
 router.get('/', parseUser, async (req, res) => {
   try {
-    const polls = await Poll.find({ campus: req.user?.campus || 'DSEU', isActive: true, status: { $ne: 'trash' } })
+    const polls = await Poll.find({ isActive: true, status: { $ne: 'trash' } })
       .populate('sender', 'displayName')
       .sort({ createdAt: -1 });
 

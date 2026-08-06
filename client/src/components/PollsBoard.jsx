@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
 export default function PollsBoard({ isAdmin }) {
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
-  const { adminCsrfToken, adminFetch } = useContext(UserContext);
+  const { adminCsrfToken, adminFetch, user } = useContext(UserContext);
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,7 +35,7 @@ export default function PollsBoard({ isAdmin }) {
 
   useEffect(() => {
     fetchPolls();
-  }, []);
+  }, [user]);
 
   // Listen to live socket.io updates
   useEffect(() => {
