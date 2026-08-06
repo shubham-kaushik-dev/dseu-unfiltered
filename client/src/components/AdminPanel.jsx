@@ -994,9 +994,9 @@ export default function AdminPanel({ onAdminStateChange }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#090a0f] text-zinc-300 font-inter flex flex-col">
+    <div className="min-h-screen bg-[#0F1117] text-slate-200 font-inter flex flex-col">
       {/* Navbar header */}
-      <div className="border-b border-zinc-800 bg-[#0e0f14] px-8 py-4 flex items-center justify-between select-none">
+      <div className="border-b border-slate-800/80 bg-[#161922] px-8 py-4 flex items-center justify-between select-none shadow-md">
         <div className="flex items-center gap-3">
           <Logo size="sm" showText={false} className="h-9 w-9" />
           <div>
@@ -1009,7 +1009,7 @@ export default function AdminPanel({ onAdminStateChange }) {
         <div className="flex items-center gap-4">
           <button 
             onClick={handleLogoutClick} 
-            className="px-3.5 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 hover:text-red-300 text-xs font-bold uppercase rounded-lg border border-red-900/50 cursor-pointer"
+            className="px-4 py-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 hover:text-red-300 text-xs font-bold uppercase rounded-xl border border-red-900/50 cursor-pointer transition shadow-md shadow-red-950/5"
           >
             Terminate Session
           </button>
@@ -1017,7 +1017,7 @@ export default function AdminPanel({ onAdminStateChange }) {
       </div>
 
       {/* Tabs */}
-      <div className="bg-[#0e0f14] border-b border-zinc-800/80 flex overflow-x-auto select-none">
+      <div className="bg-[#161922] border-b border-slate-800/80 flex overflow-x-auto select-none shadow-sm">
         {[
           { id: 'analytics', label: 'Dashboard', icon: ShieldCheck },
           { id: 'users', label: 'Directory', icon: Users },
@@ -1038,8 +1038,8 @@ export default function AdminPanel({ onAdminStateChange }) {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-6 py-4 text-xs font-black uppercase tracking-widest border-b-2 cursor-pointer transition whitespace-nowrap ${
                 activeTab === tab.id 
-                  ? 'border-purple-650 text-purple-400 bg-purple-950/5' 
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                  ? 'border-purple-600 text-purple-400 bg-purple-950/20 shadow-inner' 
+                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/10'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -1050,7 +1050,7 @@ export default function AdminPanel({ onAdminStateChange }) {
       </div>
 
       {/* Main body area */}
-      <div className="flex-1 p-8 overflow-y-auto bg-[#07080b]">
+      <div className="flex-1 p-8 overflow-y-auto bg-[#0F1117]">
         
         {/* Tab 1: Analytics Dashboard */}
         {activeTab === 'analytics' && (
@@ -1058,42 +1058,50 @@ export default function AdminPanel({ onAdminStateChange }) {
             <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Oversight Overview</h2>
             
             {statsLoading ? (
-              <p className="text-zinc-500 font-medium">Recalculating global statistics...</p>
+              <p className="text-slate-400 font-medium">Recalculating global statistics...</p>
             ) : stats ? (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
                 {[
-                  { label: "Today's Active Users", value: stats.todayActiveUsers, color: 'text-purple-400' },
-                  { label: "Online Users (Stealth-excl.)", value: stats.onlineUsers, color: 'text-emerald-400' },
-                  { label: "Banned Visitors", value: stats.bannedUsers, color: 'text-red-400' },
-                  { label: "Reports Queue", value: stats.totalReportsPending, color: 'text-amber-400' },
-                  { label: "Today's Messages", value: stats.today.chatMessages, color: 'text-zinc-300' },
-                  { label: "Today's Confessions", value: stats.today.confessions, color: 'text-zinc-300' },
-                  { label: "Today's Memes", value: stats.today.memes, color: 'text-zinc-300' },
-                  { label: "Today's Polls", value: stats.today.polls, color: 'text-zinc-300' }
-                ].map((card, i) => (
-                  <div key={i} className="p-5 bg-[#0e0f14] border border-zinc-800/80 rounded-2xl shadow-2xl">
-                    <span className="text-[11px] text-zinc-650 font-bold uppercase tracking-wider block">{card.label}</span>
-                    <span className={`text-3xl font-black block mt-2 ${card.color}`}>{card.value}</span>
-                  </div>
-                ))}
+                  { label: "Today's Active Users", value: stats.todayActiveUsers, color: 'text-purple-400', icon: Users },
+                  { label: "Online Users (Stealth-excl.)", value: stats.onlineUsers, color: 'text-emerald-400', icon: ShieldCheck },
+                  { label: "Banned Visitors", value: stats.bannedUsers, color: 'text-red-400', icon: Ban },
+                  { label: "Reports Queue", value: stats.totalReportsPending, color: 'text-amber-400', icon: AlertTriangle },
+                  { label: "Today's Messages", value: stats.today.chatMessages, color: 'text-slate-200', icon: FileText },
+                  { label: "Today's Confessions", value: stats.today.confessions, color: 'text-slate-200', icon: FileText },
+                  { label: "Today's Memes", value: stats.today.memes, color: 'text-slate-200', icon: FileText },
+                  { label: "Today's Polls", value: stats.today.polls, color: 'text-slate-200', icon: FileText }
+                ].map((card, i) => {
+                  const CardIcon = card.icon;
+                  return (
+                    <div key={i} className="p-6 bg-[#161922] border border-slate-800/80 rounded-2xl shadow-xl hover:border-purple-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-between">
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{card.label}</span>
+                        <span className={`text-3xl font-black block ${card.color}`}>{card.value}</span>
+                      </div>
+                      <div className={`p-3 rounded-xl bg-[#1e2230] ${card.color} opacity-80`}>
+                        <CardIcon className="h-5 w-5" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
 
             {stats && (
               <div className="mt-8 space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500">Service Status Logs</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Service Status Logs</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   {[
                     { service: 'Express Server', status: stats.systems.server, statusColor: 'bg-emerald-500' },
                     { service: 'MongoDB Node', status: stats.systems.db, statusColor: 'bg-emerald-500' },
                     { service: 'Cloudinary CDN', status: stats.systems.cloudinary, statusColor: 'bg-emerald-500' },
                     { service: 'Socket.IO Core', status: stats.systems.sockets, statusColor: 'bg-emerald-500' }
                   ].map((s, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 bg-[#0e0f14] border border-zinc-800/80 rounded-xl">
-                      <span className="text-xs font-bold text-zinc-400">{s.service}</span>
+                    <div key={idx} className="flex items-center justify-between p-4 bg-[#161922] border border-slate-800/80 rounded-xl hover:border-purple-650/20 transition">
+                      <span className="text-xs font-bold text-slate-350">{s.service}</span>
                       <div className="flex items-center gap-1.5">
-                        <span className={`h-2 w-2 rounded-full ${s.statusColor}`}></span>
-                        <span className="text-xs font-mono text-zinc-300">{s.status}</span>
+                        <span className={`h-2 w-2 rounded-full ${s.statusColor} animate-pulse`}></span>
+                        <span className="text-xs font-mono text-slate-200">{s.status}</span>
                       </div>
                     </div>
                   ))}
@@ -1112,13 +1120,13 @@ export default function AdminPanel({ onAdminStateChange }) {
               <div className="flex flex-wrap items-center gap-3">
                 {/* Search */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-650" />
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                   <input
                     type="text"
-                    placeholder="Search by name, campus..."
+                    placeholder="Search name, campus..."
                     value={regSearch}
                     onChange={(e) => setRegSearch(e.target.value)}
-                    className="bg-[#0e0f14] border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-purple-650"
+                    className="bg-[#161922] border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-600 transition"
                   />
                 </div>
 
@@ -1128,14 +1136,14 @@ export default function AdminPanel({ onAdminStateChange }) {
                   placeholder="Filter Campus..."
                   value={regCampus}
                   onChange={(e) => setRegCampus(e.target.value)}
-                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 placeholder-zinc-700 focus:outline-none"
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-600 transition"
                 />
 
                 {/* Ban Filter */}
                 <select
                   value={regBan}
                   onChange={(e) => setRegBan(e.target.value)}
-                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none cursor-pointer focus:border-purple-600 transition"
                 >
                   <option value="all">All Statuses</option>
                   <option value="active">Active Only</option>
@@ -1146,7 +1154,7 @@ export default function AdminPanel({ onAdminStateChange }) {
                 <select
                   value={regSortBy}
                   onChange={(e) => setRegSortBy(e.target.value)}
-                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none cursor-pointer focus:border-purple-600 transition"
                 >
                   <option value="registrationDate">Registration Date</option>
                   <option value="realName">Real Name</option>
@@ -1159,7 +1167,7 @@ export default function AdminPanel({ onAdminStateChange }) {
                 <select
                   value={regSortOrder}
                   onChange={(e) => setRegSortOrder(e.target.value)}
-                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none cursor-pointer focus:border-purple-600 transition"
                 >
                   <option value="desc">Descending</option>
                   <option value="asc">Ascending</option>
@@ -1168,7 +1176,7 @@ export default function AdminPanel({ onAdminStateChange }) {
                 {/* Export Excel */}
                 <button
                   onClick={handleExportExcel}
-                  className="px-4 py-2 bg-gradient-to-r from-emerald-650 to-teal-650 hover:from-emerald-550 hover:to-teal-550 text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-lg shadow-emerald-500/10 transition transform active:scale-98"
+                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer shadow-lg shadow-emerald-500/10 transition transform active:scale-98"
                 >
                   Export Excel
                 </button>
@@ -1177,39 +1185,41 @@ export default function AdminPanel({ onAdminStateChange }) {
 
             {/* Grid/Table List */}
             {regLoading ? (
-              <p className="text-zinc-500 font-medium select-none">Fetching registered users list...</p>
+              <p className="text-slate-400 font-medium select-none">Fetching registered users list...</p>
             ) : regUsers.length === 0 ? (
-              <p className="text-zinc-650 font-medium select-none">No registered users matched current filters.</p>
+              <p className="text-slate-500 font-medium select-none">No registered users matched current filters.</p>
             ) : (
-              <div className="overflow-x-auto border border-zinc-850 rounded-2xl shadow-xl">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="overflow-x-auto border border-slate-800/80 rounded-2xl shadow-2xl bg-[#161922] max-h-[600px] overflow-y-auto">
+                <table className="w-full text-left text-xs border-collapse relative">
                   <thead>
-                    <tr className="bg-[#0e0f14] border-b border-zinc-850 text-zinc-400 font-bold uppercase tracking-wider select-none">
-                      <th className="p-4">Real Name</th>
-                      <th className="p-4">Campus</th>
-                      <th className="p-4">Anonymous Username</th>
-                      <th className="p-4">Registration Date</th>
-                      <th className="p-4">Last Login</th>
-                      <th className="p-4">Last Seen</th>
-                      <th className="p-4 text-center">Status</th>
+                    <tr className="bg-[#161922] border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider select-none sticky top-0 z-10 shadow-sm">
+                      <th className="p-4 bg-[#161922]">Real Name</th>
+                      <th className="p-4 bg-[#161922]">Campus</th>
+                      <th className="p-4 bg-[#161922]">Anonymous Username</th>
+                      <th className="p-4 bg-[#161922]">Registration Date</th>
+                      <th className="p-4 bg-[#161922]">Last Login</th>
+                      <th className="p-4 bg-[#161922]">Last Seen</th>
+                      <th className="p-4 text-center bg-[#161922]">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {regUsers.map((u) => (
+                    {regUsers.map((u, index) => (
                       <tr 
                         key={u._id} 
                         onClick={() => {
                           setSelectedRegUser(u);
                           fetchRegUserDetails(u._id);
                         }}
-                        className="border-b border-zinc-850/60 hover:bg-zinc-900/40 text-zinc-300 font-semibold cursor-pointer transition select-none"
+                        className={`${
+                          index % 2 === 0 ? 'bg-[#181B26]' : 'bg-[#1D202F]/40'
+                        } border-b border-slate-800/60 hover:bg-purple-950/20 text-slate-300 font-semibold cursor-pointer transition select-none`}
                       >
                         <td className="p-4 font-bold text-white">{u.realName}</td>
-                        <td className="p-4">{u.campus}</td>
+                        <td className="p-4 text-slate-300">{u.campus}</td>
                         <td className="p-4 text-purple-400">@{u.displayName}</td>
-                        <td className="p-4 text-zinc-550">{u.registrationDate ? new Date(u.registrationDate).toLocaleDateString() : 'N/A'}</td>
-                        <td className="p-4 text-zinc-550">{u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Never'}</td>
-                        <td className="p-4 text-zinc-550">{u.lastActive ? new Date(u.lastActive).toLocaleDateString() : 'Offline'}</td>
+                        <td className="p-4 text-slate-400">{u.registrationDate ? new Date(u.registrationDate).toLocaleDateString() : 'N/A'}</td>
+                        <td className="p-4 text-slate-450">{u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Never'}</td>
+                        <td className="p-4 text-slate-450">{u.lastActive ? new Date(u.lastActive).toLocaleDateString() : 'Offline'}</td>
                         <td className="p-4 text-center">
                           <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                             u.isBanned ? 'bg-red-950/40 text-red-400 border border-red-900/30' : 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30'
@@ -1226,19 +1236,19 @@ export default function AdminPanel({ onAdminStateChange }) {
 
             {/* Pagination Controls */}
             {regPages > 1 && (
-              <div className="flex items-center justify-between text-xs font-bold text-zinc-500 pt-2 select-none">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-400 pt-2 select-none">
                 <button
                   disabled={regPage === 1}
                   onClick={() => setRegPage(p => Math.max(1, p - 1))}
-                  className="px-3 py-1.5 bg-[#0e0f14] hover:bg-zinc-900 border border-zinc-850 rounded-lg disabled:opacity-40 cursor-pointer"
+                  className="px-4 py-2 bg-[#161922] hover:bg-slate-800 border border-slate-800/80 rounded-xl disabled:opacity-40 cursor-pointer text-slate-300 font-bold transition"
                 >
                   Prev
                 </button>
-                <span>Page {regPage} of {regPages}</span>
+                <span className="font-semibold text-slate-450">Page {regPage} of {regPages}</span>
                 <button
                   disabled={regPage === regPages}
                   onClick={() => setRegPage(p => Math.min(regPages, p + 1))}
-                  className="px-3 py-1.5 bg-[#0e0f14] hover:bg-zinc-900 border border-zinc-850 rounded-lg disabled:opacity-40 cursor-pointer"
+                  className="px-4 py-2 bg-[#161922] hover:bg-slate-800 border border-slate-800/80 rounded-xl disabled:opacity-40 cursor-pointer text-slate-300 font-bold transition"
                 >
                   Next
                 </button>
@@ -1253,34 +1263,36 @@ export default function AdminPanel({ onAdminStateChange }) {
             <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Password Reset Requests</h2>
 
             {resetsLoading ? (
-              <p className="text-zinc-500 font-medium select-none">Fetching password reset queue...</p>
+              <p className="text-slate-400 font-medium select-none">Fetching password reset queue...</p>
             ) : resetRequests.length === 0 ? (
-              <p className="text-zinc-650 font-medium select-none">No pending password reset requests.</p>
+              <p className="text-slate-500 font-medium select-none">No pending password reset requests.</p>
             ) : (
-              <div className="overflow-x-auto border border-zinc-850 rounded-2xl shadow-xl">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="overflow-x-auto border border-slate-800/80 rounded-2xl shadow-2xl bg-[#161922] max-h-[600px] overflow-y-auto">
+                <table className="w-full text-left text-xs border-collapse relative">
                   <thead>
-                    <tr className="bg-[#0e0f14] border-b border-zinc-850 text-zinc-400 font-bold uppercase tracking-wider select-none">
-                      <th className="p-4">Username</th>
-                      <th className="p-4">Real Name</th>
-                      <th className="p-4">Campus</th>
-                      <th className="p-4">Reason</th>
-                      <th className="p-4">Date</th>
-                      <th className="p-4 text-center">Status</th>
-                      <th className="p-4 text-right">Actions</th>
+                    <tr className="bg-[#161922] border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider select-none sticky top-0 z-10 shadow-sm">
+                      <th className="p-4 bg-[#161922]">Username</th>
+                      <th className="p-4 bg-[#161922]">Real Name</th>
+                      <th className="p-4 bg-[#161922]">Campus</th>
+                      <th className="p-4 bg-[#161922]">Reason</th>
+                      <th className="p-4 bg-[#161922]">Date</th>
+                      <th className="p-4 text-center bg-[#161922]">Status</th>
+                      <th className="p-4 text-right bg-[#161922]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {resetRequests.map((r) => (
+                    {resetRequests.map((r, index) => (
                       <tr 
                         key={r._id}
-                        className="border-b border-zinc-850/60 hover:bg-zinc-900/20 text-zinc-300 font-semibold select-none"
+                        className={`${
+                          index % 2 === 0 ? 'bg-[#181B26]' : 'bg-[#1D202F]/40'
+                        } border-b border-slate-800/60 hover:bg-purple-950/20 text-slate-300 font-semibold transition select-none`}
                       >
                         <td className="p-4 text-purple-400 font-bold">@{r.username}</td>
                         <td className="p-4 font-bold text-white">{r.realName}</td>
-                        <td className="p-4">{r.campus}</td>
-                        <td className="p-4 max-w-xs truncate leading-relaxed text-zinc-450" title={r.reason}>{r.reason}</td>
-                        <td className="p-4 text-zinc-550">{new Date(r.createdAt).toLocaleDateString()}</td>
+                        <td className="p-4 text-slate-300">{r.campus}</td>
+                        <td className="p-4 max-w-xs truncate leading-relaxed text-slate-400" title={r.reason}>{r.reason}</td>
+                        <td className="p-4 text-slate-450">{new Date(r.createdAt).toLocaleDateString()}</td>
                         <td className="p-4 text-center">
                           <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                             r.status === 'pending' ? 'bg-amber-950/40 text-amber-400 border border-amber-900/30' :
@@ -1295,13 +1307,13 @@ export default function AdminPanel({ onAdminStateChange }) {
                             <div className="flex justify-end gap-2">
                               <button
                                 onClick={() => handleResetAction(r._id, 'approve')}
-                                className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-550 text-white rounded-lg cursor-pointer text-[10px] font-bold uppercase transition"
+                                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-550 text-white rounded-xl cursor-pointer text-[10px] font-bold uppercase transition shadow-md shadow-purple-600/10"
                               >
                                 Approve & Send
                               </button>
                               <button
                                 onClick={() => handleResetAction(r._id, 'reject')}
-                                className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-450 hover:text-white rounded-lg cursor-pointer text-[10px] font-bold uppercase transition"
+                                className="px-3 py-1.5 bg-[#1e2230] hover:bg-[#2c3147] text-slate-300 hover:text-white rounded-xl cursor-pointer text-[10px] font-bold uppercase border border-slate-800 transition"
                               >
                                 Reject
                               </button>
@@ -1478,20 +1490,20 @@ export default function AdminPanel({ onAdminStateChange }) {
               
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-600" />
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                   <input
                     type="text"
-                    placeholder="Search by nickname/token..."
+                    placeholder="Search nickname/token..."
                     value={usersSearch}
                     onChange={(e) => setUsersSearch(e.target.value)}
-                    className="bg-[#0e0f14] border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-purple-650"
+                    className="bg-[#161922] border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-650 transition"
                   />
                 </div>
 
                 <select
                   value={usersFilter}
                   onChange={(e) => { setUsersFilter(e.target.value); setUsersPage(1); }}
-                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-350 focus:outline-none cursor-pointer focus:border-purple-650 transition"
                 >
                   <option value="all">All Users</option>
                   <option value="online">Online</option>
@@ -1503,7 +1515,7 @@ export default function AdminPanel({ onAdminStateChange }) {
                 <select
                   value={usersSort}
                   onChange={(e) => { setUsersSort(e.target.value); setUsersPage(1); }}
-                  className="bg-[#0e0f14] border border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none cursor-pointer"
+                  className="bg-[#161922] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-350 focus:outline-none cursor-pointer focus:border-purple-650 transition"
                 >
                   <option value="newest">Newest Join</option>
                   <option value="oldest">Oldest Join</option>
@@ -1514,68 +1526,73 @@ export default function AdminPanel({ onAdminStateChange }) {
 
             {/* Bulk options bar */}
             {selectedUserIds.length > 0 && (
-              <div className="p-4 bg-purple-950/15 border border-purple-500/20 rounded-xl flex items-center justify-between text-xs select-none">
+              <div className="p-4 bg-purple-950/20 border border-purple-500/25 rounded-2xl flex flex-wrap items-center justify-between text-xs gap-3 select-none">
                 <span className="font-bold text-purple-400 uppercase tracking-widest">{selectedUserIds.length} users selected</span>
-                <div className="flex gap-2">
-                  <button onClick={() => handleBulkAction('ban')} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/50 cursor-pointer uppercase font-black">Ban</button>
-                  <button onClick={() => handleBulkAction('unban')} className="px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-400 rounded-lg border border-emerald-900/50 cursor-pointer uppercase font-black">Unban</button>
-                  <button onClick={() => handleBulkAction('mute', 60)} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg border border-zinc-850 cursor-pointer uppercase font-black">Mute 1h</button>
-                  <button onClick={() => handleBulkAction('unmute')} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg border border-zinc-850 cursor-pointer uppercase font-black">Unmute</button>
-                  <button onClick={() => handleBulkAction('shadow-ban')} className="px-3 py-1.5 bg-amber-950/40 hover:bg-amber-900/40 text-amber-400 rounded-lg border border-amber-900/50 cursor-pointer uppercase font-black">Shadow Ban</button>
-                  <button onClick={() => handleBulkAction('unshadow-ban')} className="px-3 py-1.5 bg-amber-950/40 hover:bg-amber-900/40 text-amber-400 rounded-lg border border-amber-900/50 cursor-pointer uppercase font-black">Unshadow</button>
-                  <button onClick={() => handleBulkAction('delete')} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/50 cursor-pointer uppercase font-black">Delete Accounts</button>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => handleBulkAction('ban')} className="px-3.5 py-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-xl border border-red-900/40 cursor-pointer uppercase font-black transition">Ban</button>
+                  <button onClick={() => handleBulkAction('unban')} className="px-3.5 py-2 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-400 rounded-xl border border-emerald-900/40 cursor-pointer uppercase font-black transition">Unban</button>
+                  <button onClick={() => handleBulkAction('mute', 60)} className="px-3.5 py-2 bg-[#1e2230] hover:bg-[#2c3147] text-slate-300 rounded-xl border border-slate-800 cursor-pointer uppercase font-black transition">Mute 1h</button>
+                  <button onClick={() => handleBulkAction('unmute')} className="px-3.5 py-2 bg-[#1e2230] hover:bg-[#2c3147] text-slate-300 rounded-xl border border-slate-800 cursor-pointer uppercase font-black transition">Unmute</button>
+                  <button onClick={() => handleBulkAction('shadow-ban')} className="px-3.5 py-2 bg-amber-950/40 hover:bg-amber-900/40 text-amber-400 rounded-xl border border-amber-900/40 cursor-pointer uppercase font-black transition">Shadow Ban</button>
+                  <button onClick={() => handleBulkAction('unshadow-ban')} className="px-3.5 py-2 bg-amber-950/40 hover:bg-amber-900/40 text-amber-400 rounded-xl border border-amber-900/40 cursor-pointer uppercase font-black transition">Unshadow</button>
+                  <button onClick={() => handleBulkAction('delete')} className="px-3.5 py-2 bg-red-950/40 hover:bg-red-900/45 text-red-400 rounded-xl border border-red-900/50 cursor-pointer uppercase font-black transition">Delete Accounts</button>
                 </div>
               </div>
             )}
 
             {/* Users Directory Table */}
             {usersLoading ? (
-              <p className="text-zinc-500 font-medium">Scanning network database...</p>
+              <p className="text-slate-400 font-medium">Scanning network database...</p>
             ) : (
-              <div className="bg-[#0e0f14] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-2xl">
-                <table className="w-full border-collapse text-left text-xs">
+              <div className="bg-[#161922] border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl max-h-[600px] overflow-y-auto">
+                <table className="w-full border-collapse text-left text-xs relative">
                   <thead>
-                    <tr className="border-b border-zinc-800 text-zinc-500 select-none bg-zinc-950/50 font-bold uppercase tracking-wider">
-                      <th className="p-4 w-10">
+                    <tr className="border-b border-slate-800 text-slate-400 select-none bg-[#161922] font-bold uppercase tracking-wider sticky top-0 z-10 shadow-sm">
+                      <th className="p-4 w-10 bg-[#161922]">
                         <input
                           type="checkbox"
                           checked={selectedUserIds.length === usersList.length && usersList.length > 0}
                           onChange={handleSelectAllToggle}
-                          className="h-4 w-4 cursor-pointer accent-purple-650"
+                          className="h-4 w-4 cursor-pointer accent-purple-600"
                         />
                       </th>
-                      <th className="p-4">Anonymous Nickname</th>
-                      <th className="p-4">Oversight Status</th>
-                      <th className="p-4">Last Seen Address</th>
-                      <th className="p-4 text-center">Messages</th>
-                      <th className="p-4 text-center">Confessions</th>
-                      <th className="p-4 text-center">Memes</th>
-                      <th className="p-4 text-center">Warnings</th>
-                      <th className="p-4 text-center">Actions</th>
+                      <th className="p-4 bg-[#161922]">Anonymous Nickname</th>
+                      <th className="p-4 bg-[#161922]">Oversight Status</th>
+                      <th className="p-4 bg-[#161922]">Last Seen Address</th>
+                      <th className="p-4 text-center bg-[#161922]">Messages</th>
+                      <th className="p-4 text-center bg-[#161922]">Confessions</th>
+                      <th className="p-4 text-center bg-[#161922]">Memes</th>
+                      <th className="p-4 text-center bg-[#161922]">Warnings</th>
+                      <th className="p-4 text-center bg-[#161922]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {usersList.length === 0 ? (
                       <tr>
-                        <td colSpan="9" className="p-8 text-center text-zinc-650 font-semibold uppercase tracking-wider">No users matching search filters found.</td>
+                        <td colSpan="9" className="p-8 text-center text-slate-500 font-semibold uppercase tracking-wider">No users matching search filters found.</td>
                       </tr>
                     ) : (
-                      usersList.map((u) => (
-                        <tr key={u._id} className="border-b border-zinc-850 hover:bg-zinc-900/30 transition duration-150">
+                      usersList.map((u, index) => (
+                        <tr 
+                          key={u._id} 
+                          className={`${
+                            index % 2 === 0 ? 'bg-[#181B26]' : 'bg-[#1D202F]/40'
+                          } border-b border-slate-800/60 hover:bg-purple-950/20 transition duration-150`}
+                        >
                           <td className="p-4">
                             <input
                               type="checkbox"
                               checked={selectedUserIds.includes(u._id)}
                               onChange={() => handleUserSelectToggle(u._id)}
-                              className="h-4 w-4 cursor-pointer accent-purple-650"
+                              className="h-4 w-4 cursor-pointer accent-purple-600"
                             />
                           </td>
-                          <td className="p-4 font-bold text-zinc-200">
+                          <td className="p-4 font-bold text-white">
                             <div className="flex items-center gap-2">
-                              <span className={`h-2 w-2 rounded-full ${u.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-700'}`}></span>
+                              <span className={`h-2 w-2 rounded-full ${u.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
                               <span>{u.displayName}</span>
                               {u.isShadowBanned && (
-                                <span className="text-[9px] font-black uppercase text-red-500 bg-red-950/40 border border-red-900/50 px-1 rounded">Shadow</span>
+                                <span className="text-[9px] font-black uppercase text-red-400 bg-red-950/40 border border-red-900/50 px-1.5 py-0.5 rounded">Shadow</span>
                               )}
                             </div>
                           </td>
@@ -1588,13 +1605,13 @@ export default function AdminPanel({ onAdminStateChange }) {
                               <span className="text-emerald-500 font-bold uppercase tracking-wider block text-[10px]">ACTIVE</span>
                             )}
                           </td>
-                          <td className="p-4 font-mono text-[10px] text-zinc-500 max-w-[150px] truncate">
+                          <td className="p-4 font-mono text-[10px] text-slate-450 max-w-[150px] truncate">
                             IP: {u.ip || 'Unknown'}
                           </td>
-                          <td className="p-4 text-center font-semibold text-zinc-400">{u.chatCount}</td>
-                          <td className="p-4 text-center font-semibold text-zinc-400">{u.confessionCount}</td>
-                          <td className="p-4 text-center font-semibold text-zinc-400">{u.memeCount}</td>
-                          <td className="p-4 text-center font-bold text-zinc-400">
+                          <td className="p-4 text-center font-semibold text-slate-300">{u.chatCount}</td>
+                          <td className="p-4 text-center font-semibold text-slate-300">{u.confessionCount}</td>
+                          <td className="p-4 text-center font-semibold text-slate-300">{u.memeCount}</td>
+                          <td className="p-4 text-center font-bold text-slate-300">
                             {u.warnings?.length > 0 ? (
                               <span className="text-red-400">{u.warnings.length}</span>
                             ) : '-'}
@@ -1602,7 +1619,7 @@ export default function AdminPanel({ onAdminStateChange }) {
                           <td className="p-4 text-center">
                             <button
                               onClick={() => handleOpenUserDrawer(u._id)}
-                              className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg border border-zinc-850 cursor-pointer"
+                              className="px-3 py-1.5 bg-[#1e2230] hover:bg-[#2c3147] text-slate-300 hover:text-white rounded-xl border border-slate-800 cursor-pointer text-xs transition"
                             >
                               Oversight Profile
                             </button>
@@ -1648,35 +1665,35 @@ export default function AdminPanel({ onAdminStateChange }) {
             <h2 className="text-[28px] font-black uppercase text-white tracking-tight">Oversight Reports Queue</h2>
 
             {reportsLoading ? (
-              <p className="text-zinc-500 font-medium">Scanning incoming reports...</p>
+              <p className="text-slate-400 font-medium">Scanning incoming reports...</p>
             ) : reports.length === 0 ? (
-              <div className="p-8 text-center bg-[#0e0f14] border border-zinc-800/80 rounded-2xl text-zinc-500 uppercase tracking-widest font-bold">
+              <div className="p-8 text-center bg-[#161922] border border-slate-800/80 rounded-[20px] text-slate-500 uppercase tracking-widest font-bold select-none">
                 Oversight Reports Queue is currently empty.
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 {reports.map((rep) => (
-                  <div key={rep._id} className="p-5 bg-[#0e0f14] border border-zinc-800/80 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div key={rep._id} className="p-6 bg-[#161922] border border-slate-800/80 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-purple-650/20 transition">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-amber-500 bg-amber-950/40 border border-amber-900/50 px-1.5 py-0.2 rounded tracking-widest">
+                        <span className="text-[10px] font-black uppercase text-amber-500 bg-amber-950/40 border border-amber-900/50 px-2 py-0.5 rounded tracking-widest">
                           REPORTED {rep.targetType}
                         </span>
-                        <span className="text-[10px] font-mono text-zinc-650">ID: {rep.targetId}</span>
+                        <span className="text-[10px] font-mono text-slate-500">ID: {rep.targetId}</span>
                       </div>
-                      <p className="text-zinc-200 text-xs font-semibold leading-relaxed pt-1">
+                      <p className="text-slate-200 text-xs font-semibold leading-relaxed pt-1">
                         Report Reason: <span className="text-amber-400 italic">"{rep.reason}"</span>
                       </p>
-                      <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider pt-1">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pt-1">
                         Target details: {rep.targetDetails}
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
-                      <button onClick={() => handleReportAction(rep._id, 'ignore')} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-850 rounded-lg cursor-pointer uppercase font-bold text-[10px]">Ignore</button>
-                      <button onClick={() => handleReportAction(rep._id, 'delete_content')} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/50 cursor-pointer uppercase font-bold text-[10px]">Delete post</button>
-                      <button onClick={() => handleReportAction(rep._id, 'ban_user')} className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/50 cursor-pointer uppercase font-bold text-[10px]">Ban author</button>
-                      <button onClick={() => handleReportAction(rep._id, 'mute_user', 60)} className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg border border-zinc-850 cursor-pointer uppercase font-bold text-[10px]">Mute author 1h</button>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => handleReportAction(rep._id, 'ignore')} className="px-3.5 py-2 bg-[#1e2230] hover:bg-[#2c3147] text-slate-350 hover:text-white border border-slate-800 rounded-xl cursor-pointer uppercase font-bold text-[10px] transition">Ignore</button>
+                      <button onClick={() => handleReportAction(rep._id, 'delete_content')} className="px-3.5 py-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-xl border border-red-900/50 cursor-pointer uppercase font-bold text-[10px] transition">Delete post</button>
+                      <button onClick={() => handleReportAction(rep._id, 'ban_user')} className="px-3.5 py-2 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-xl border border-red-900/50 cursor-pointer uppercase font-bold text-[10px] transition">Ban author</button>
+                      <button onClick={() => handleReportAction(rep._id, 'mute_user', 60)} className="px-3.5 py-2 bg-[#1e2230] hover:bg-[#2c3147] text-slate-300 rounded-xl border border-slate-800 cursor-pointer uppercase font-bold text-[10px] transition">Mute author 1h</button>
                     </div>
                   </div>
                 ))}
@@ -1685,34 +1702,34 @@ export default function AdminPanel({ onAdminStateChange }) {
           </div>
         )}
 
-        {/* Tab 4: Support Inbox Messenger */}
+        {/* Tab 6: Support Inbox Messenger */}
         {activeTab === 'support' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[72vh] overflow-hidden">
             {/* List side */}
-            <div className="bg-[#0e0f14] border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden">
-              <div className="p-4 border-b border-zinc-800/80 bg-zinc-950/50 flex flex-col gap-3">
+            <div className="bg-[#161922] border border-slate-800/80 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+              <div className="p-4 border-b border-slate-850 bg-[#161922] flex flex-col gap-3">
                 <div className="relative select-none">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-700" />
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                   <input
                     type="text"
                     placeholder="Search conversations..."
                     value={supportSearch}
                     onChange={(e) => setSupportSearch(e.target.value)}
-                    className="w-full bg-[#121318] border border-zinc-850 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-purple-650"
+                    className="w-full bg-[#1c202e] border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-200 placeholder-slate-650 focus:outline-none focus:border-purple-650 transition"
                   />
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { setSupportFilter('all'); setSupportPage(1); }} className={`px-3 py-1 text-[10px] font-bold uppercase rounded-lg border cursor-pointer ${supportFilter === 'all' ? 'bg-purple-650 border-purple-600 text-white' : 'bg-zinc-900 border-zinc-850 text-zinc-500'}`}>All</button>
-                  <button onClick={() => { setSupportFilter('unread'); setSupportPage(1); }} className={`px-3 py-1 text-[10px] font-bold uppercase rounded-lg border cursor-pointer ${supportFilter === 'unread' ? 'bg-purple-650 border-purple-600 text-white' : 'bg-zinc-900 border-zinc-850 text-zinc-500'}`}>Unread</button>
+                  <button onClick={() => { setSupportFilter('all'); setSupportPage(1); }} className={`px-4 py-1.5 text-[10px] font-bold uppercase rounded-xl border cursor-pointer transition ${supportFilter === 'all' ? 'bg-purple-650 border-purple-600 text-white' : 'bg-[#1c202e] border-slate-800 text-slate-400'}`}>All</button>
+                  <button onClick={() => { setSupportFilter('unread'); setSupportPage(1); }} className={`px-4 py-1.5 text-[10px] font-bold uppercase rounded-xl border cursor-pointer transition ${supportFilter === 'unread' ? 'bg-purple-650 border-purple-600 text-white' : 'bg-[#1c202e] border-slate-800 text-slate-400'}`}>Unread</button>
                 </div>
               </div>
 
               {/* Conversations Feed */}
-              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
                 {supportLoading ? (
-                  <p className="text-zinc-650 text-xs font-semibold p-4 text-center">Loading threads...</p>
+                  <p className="text-slate-500 text-xs font-semibold p-4 text-center">Loading threads...</p>
                 ) : conversations.length === 0 ? (
-                  <p className="text-zinc-650 text-xs font-semibold p-4 text-center select-none uppercase tracking-wide">No conversations found.</p>
+                  <p className="text-slate-600 text-xs font-bold p-4 text-center select-none uppercase tracking-wide">No conversations found.</p>
                 ) : (
                   conversations.map((c) => (
                     <button
@@ -1721,23 +1738,35 @@ export default function AdminPanel({ onAdminStateChange }) {
                         setSelectedConversationToken(c.user.browserToken);
                         fetchConversationMessages(c.user.browserToken);
                       }}
-                      className={`w-full p-3 rounded-xl flex items-center justify-between text-left cursor-pointer transition ${
+                      className={`w-full p-3 rounded-xl flex items-center justify-between text-left cursor-pointer transition border ${
                         selectedConversationToken === c.user.browserToken 
-                          ? 'bg-[#2d1b4e] border border-purple-700 text-white shadow-lg' 
-                          : 'hover:bg-zinc-900/50 border border-transparent'
+                          ? 'bg-[#2d1b4e] border-purple-600 text-white shadow-lg' 
+                          : 'hover:bg-[#1e2230] border-transparent text-slate-300'
                       }`}
                     >
-                      <div className="truncate space-y-0.5">
-                        <span className="text-xs font-bold text-zinc-200 block truncate">{c.user.displayName}</span>
-                        <span className="text-[10px] text-zinc-550 block truncate font-mono">
-                          {c.lastMessage ? c.lastMessage.text || '[Attachment Image]' : 'appeal started'}
-                        </span>
+                      <div className="flex items-center gap-3 truncate">
+                        <img
+                          src={`https://api.dicebear.com/7.x/identicon/svg?seed=${c.user.displayName}`}
+                          alt="Avatar"
+                          className="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 object-cover shrink-0"
+                        />
+                        <div className="truncate space-y-0.5">
+                          <span className="text-xs font-bold text-white block truncate">{c.user.displayName}</span>
+                          <span className="text-[10px] text-slate-400 block truncate font-mono">
+                            {c.lastMessage ? c.lastMessage.text || '[Attachment Image]' : 'appeal started'}
+                          </span>
+                        </div>
                       </div>
-                      {c.unreadCount > 0 && (
-                        <span className="h-5 w-5 bg-purple-600 border border-purple-700 text-white rounded-full flex items-center justify-center font-bold text-[10px]">
-                          {c.unreadCount}
+                      <div className="flex flex-col items-end gap-1.5 shrink-0 select-none">
+                        <span className="text-[9px] text-slate-500 font-mono">
+                          {c.lastMessage ? new Date(c.lastMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                         </span>
-                      )}
+                        {c.unreadCount > 0 && (
+                          <span className="h-5 w-5 bg-purple-600 border border-purple-700 text-white rounded-full flex items-center justify-center font-black text-[10px] shadow-sm animate-pulse">
+                            {c.unreadCount}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))
                 )}
@@ -1745,66 +1774,88 @@ export default function AdminPanel({ onAdminStateChange }) {
             </div>
 
             {/* Conversational Screen */}
-            <div className="md:col-span-2 bg-[#0e0f14] border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden relative">
+            <div className="md:col-span-2 bg-[#161922] border border-slate-800/85 rounded-2xl flex flex-col overflow-hidden relative shadow-2xl">
               {selectedConversationToken ? (
                 <>
                   {/* Header details */}
-                  <div className="p-4 border-b border-zinc-800/80 bg-zinc-950/50 flex items-center justify-between select-none">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-black text-zinc-200 block">Conversation with Appeal User</span>
-                      <span className="text-[10px] text-purple-400 font-mono tracking-widest uppercase block">Token: {selectedConversationToken.substring(0, 15)}...</span>
-                    </div>
+                  {(() => {
+                    const thread = conversations.find(c => c.user.browserToken === selectedConversationToken);
+                    const userObj = thread?.user;
+                    if (!userObj) return null;
+                    return (
+                      <div className="p-4 border-b border-slate-800/80 bg-[#161922] flex items-center justify-between select-none shadow-md">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <img
+                              src={`https://api.dicebear.com/7.x/identicon/svg?seed=${userObj.displayName}`}
+                              alt="Avatar"
+                              className="h-9 w-9 rounded-full bg-slate-800 border border-slate-700 object-cover"
+                            />
+                            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#161922] ${userObj.isOnline ? 'bg-emerald-500' : 'bg-slate-650'}`}></span>
+                          </div>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-white block">@{userObj.displayName}</span>
+                              <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest font-mono">({userObj.isOnline ? 'Online' : 'Offline'})</span>
+                            </div>
+                            <span className="text-[9px] text-purple-400 font-mono tracking-widest uppercase block">Token: {selectedConversationToken}</span>
+                          </div>
+                        </div>
 
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={async () => {
-                          const userObj = conversations.find(c => c.user.browserToken === selectedConversationToken)?.user;
-                          if (!userObj) return;
-                          const action = userObj.isBanned ? 'unban' : 'ban';
-                          if (window.confirm(`${action === 'ban' ? 'Ban' : 'Unban'} this user appeal?`)) {
-                            await adminFetch('/api/admin/user/bulk-action', {
-                              method: 'POST',
-                              body: JSON.stringify({ userIds: [userObj.id], action })
-                            });
-                            showToast(`User ${action === 'ban' ? 'banned' : 'unbanned'} successfully.`, 'success');
-                            fetchConversations();
-                            fetchConversationMessages(selectedConversationToken);
-                          }
-                        }}
-                        className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg border border-zinc-850 cursor-pointer text-[10px] uppercase font-bold"
-                      >
-                        Toggle Ban Status
-                      </button>
-                    </div>
-                  </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={async () => {
+                              const action = userObj.isBanned ? 'unban' : 'ban';
+                              if (window.confirm(`${action === 'ban' ? 'Ban' : 'Unban'} this user appeal?`)) {
+                                await adminFetch('/api/admin/user/bulk-action', {
+                                  method: 'POST',
+                                  body: JSON.stringify({ userIds: [userObj.id], action })
+                                });
+                                showToast(`User ${action === 'ban' ? 'banned' : 'unbanned'} successfully.`, 'success');
+                                fetchConversations();
+                                fetchConversationMessages(selectedConversationToken);
+                              }
+                            }}
+                            className={`px-4 py-2 text-[10px] uppercase font-bold tracking-wider rounded-xl cursor-pointer transition shadow-md border ${
+                              userObj.isBanned 
+                                ? 'bg-emerald-950/40 hover:bg-emerald-900/30 text-emerald-400 border-emerald-900/40 shadow-emerald-900/10' 
+                                : 'bg-red-950/40 hover:bg-red-900/40 text-red-400 border-red-900/50 shadow-red-900/10'
+                            }`}
+                          >
+                            {userObj.isBanned ? 'Unban User' : 'Ban User'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Thread messages */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-950/15">
+                  <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#0F1117]">
                     {conversationHistory.map((m) => {
                       const isAdmin = m.senderType === 'admin';
                       return (
                         <div key={m._id} className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'} space-y-1`}>
-                          <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider font-mono">
+                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider font-mono px-1">
                             {m.senderName}
                           </span>
                           <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs shadow-md border ${
                             isAdmin 
-                              ? 'bg-[#e9d5ff] border-purple-300 text-black rounded-tr-sm'
-                              : 'bg-white border-zinc-200 text-black rounded-tl-sm'
+                              ? 'bg-[#E9D5FF] border-[#D8B4FE] text-black rounded-tr-none'
+                              : 'bg-white border-slate-200 text-black rounded-tl-none font-medium'
                           }`}>
                             {m.imageUrl && (
-                              <a href={m.imageUrl} target="_blank" rel="noreferrer" className="block mb-1.5 rounded-lg overflow-hidden border border-zinc-200 bg-slate-50">
+                              <a href={m.imageUrl} target="_blank" rel="noreferrer" className="block mb-1.5 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
                                 <img src={m.imageUrl} alt="Support attachment" className="w-full max-h-48 object-cover hover:scale-105 transition" />
                               </a>
                             )}
                             {m.text && <p className="break-words leading-relaxed whitespace-pre-wrap">{m.text}</p>}
                           </div>
                           <div className="flex items-center gap-1.5 px-1 select-none">
-                            <span className="text-[9px] text-zinc-500 font-mono">
+                            <span className="text-[9px] text-slate-500 font-mono">
                               {new Date(m.createdAt).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}
                             </span>
                             {isAdmin && (
-                              <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                              <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
                                 {m.isSeen ? '• Read' : '• Sent'}
                               </span>
                             )}
@@ -1813,24 +1864,24 @@ export default function AdminPanel({ onAdminStateChange }) {
                       );
                     })}
                     {supportUserTyping && (
-                      <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest italic animate-pulse">User is typing appeal...</p>
+                      <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest italic animate-pulse">User is typing appeal...</p>
                     )}
                     <div ref={supportBottomRef} />
                   </div>
 
                   {/* Attachment review bar */}
                   {supportPreviewUrl && (
-                    <div className="p-2 border-t border-zinc-800/80 bg-zinc-950 flex items-center justify-between">
+                    <div className="p-3 border-t border-slate-800/80 bg-[#161922] flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <img src={supportPreviewUrl} alt="Attachment" className="h-10 w-10 object-cover rounded border border-zinc-800" />
-                        <span className="text-[10px] text-zinc-600 font-mono">({Math.round(supportAttachment.size / 1024)} KB)</span>
+                        <img src={supportPreviewUrl} alt="Attachment" className="h-10 w-10 object-cover rounded-xl border border-slate-700" />
+                        <span className="text-[10px] text-slate-400 font-mono">({Math.round(supportAttachment.size / 1024)} KB)</span>
                       </div>
-                      <button onClick={handleRemoveSupportAttachment} className="text-xs text-red-500 hover:text-red-400 font-bold px-2 py-1 bg-red-950/40 rounded border border-red-900/50 cursor-pointer">Remove</button>
+                      <button onClick={handleRemoveSupportAttachment} className="text-xs text-red-400 hover:text-red-300 font-bold px-3 py-1.5 bg-red-950/40 rounded-xl border border-red-900/50 cursor-pointer transition">Remove</button>
                     </div>
                   )}
 
                   {/* Input bar */}
-                  <form onSubmit={handleSendSupportReply} className="p-3 border-t border-zinc-800/80 bg-zinc-950/80 flex gap-2 items-center">
+                  <form onSubmit={handleSendSupportReply} className="p-4 border-t border-slate-800/80 bg-[#161922] flex gap-3 items-center">
                     <input
                       type="file"
                       accept="image/*"
@@ -1841,7 +1892,7 @@ export default function AdminPanel({ onAdminStateChange }) {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="p-2.5 bg-zinc-900 hover:bg-zinc-850 text-zinc-500 hover:text-zinc-300 rounded-xl cursor-pointer border border-zinc-800"
+                      className="p-3 bg-[#1e2230] hover:bg-[#2c3147] text-slate-400 hover:text-white rounded-xl cursor-pointer border border-slate-800 transition"
                     >
                       <Image className="h-4.5 w-4.5" />
                     </button>
@@ -1856,13 +1907,13 @@ export default function AdminPanel({ onAdminStateChange }) {
                           socket.emit('support-typing', { token: selectedConversationToken, isTyping: e.target.value.trim() !== '' });
                         }
                       }}
-                      className="flex-1 bg-[#121318] border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-purple-650"
+                      className="flex-1 bg-[#1e2230] border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-650 transition"
                     />
                     
                     <button
                       type="submit"
                       disabled={supportSending || (!supportReplyText.trim() && !supportAttachment)}
-                      className="p-2.5 bg-purple-600 hover:bg-purple-550 disabled:opacity-40 text-white rounded-xl cursor-pointer"
+                      className="p-3 bg-purple-650 hover:bg-purple-600 disabled:opacity-40 text-white rounded-xl cursor-pointer transition shadow-md shadow-purple-600/10"
                     >
                       {supportSending ? (
                         <div className="h-4.5 w-4.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

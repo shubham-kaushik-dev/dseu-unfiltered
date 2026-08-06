@@ -183,7 +183,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, originalMessage
                   <input
                     type="text"
                     required
-                    placeholder="E.g. Shubh Kaushik"
+                    placeholder="Enter your full name"
                     value={realName}
                     onChange={(e) => setRealName(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500/50 focus:bg-white transition"

@@ -40,6 +40,7 @@
   - Tabbed interface for Login, Register, Forgot Password.
   - Intercept chat sending, support messages, appeals to trigger modal for unregistered users.
   - Auto-send originally typed message after login/registration.
+  - Change "Real Name" placeholder to `"Enter your full name"`.
 - [x] Create Profile management modal (`ProfileModal.jsx`) for editing username and password.
 - [x] Create forced password change screen (`ForceChangePassword.jsx`) when `mustChangePassword` is active.
 - [x] Update `UserContext.jsx`:
@@ -58,6 +59,7 @@
   - Light purple background + black text for outgoing messages.
   - Grey timestamps.
 - [x] Polish Admin Panel typography, spacing, contrast, message alignments, and unread conversation highlight.
+- [x] Redesign Admin Panel backgrounds, headers, tabs, statistics, tables, and conversation bubbles to match premium DSEU dark purple theme.
 
 ## Phase 5: Testing & Verification
 - [x] Install node dependencies (`xlsx` package in server).
