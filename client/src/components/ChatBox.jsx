@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function ChatBox({ isAdmin, adminToken }) {
-  const { user, adminCsrfToken, adminFetch, openLoginModal } = useContext(UserContext);
+  const { user, adminCsrfToken, adminFetch, openLoginModal, isAdmin: isAdminFromContext } = useContext(UserContext);
   const { socket, onlineCount, slowModeSeconds } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
 
@@ -215,7 +215,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
     e.preventDefault();
     if (inputText.trim() === '' || cooldown > 0) return;
 
-    if (!user || (!user.isRegistered && user.role !== 'admin' && user.role !== 'sub-admin' && user.role !== 'sub_admin')) {
+    if (!isAdminFromContext && (!user || !user.isRegistered)) {
       openLoginModal(() => {
         socket.emit('send-chat-message', {
           text: inputText,
@@ -223,7 +223,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
           messageType: sendAsNotice ? 'notice' : 'normal'
         });
 
-        if (slowModeSeconds > 0 && user?.role !== 'admin') {
+        if (slowModeSeconds > 0 && !isAdminFromContext) {
           setCooldown(slowModeSeconds);
         }
 
@@ -247,7 +247,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
       messageType: sendAsNotice ? 'notice' : 'normal'
     });
 
-    if (slowModeSeconds > 0 && user?.role !== 'admin') {
+    if (slowModeSeconds > 0 && !isAdminFromContext) {
       setCooldown(slowModeSeconds);
     }
 
@@ -401,7 +401,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
             const isEditable = isMe && (Date.now() - new Date(msg.createdAt).getTime() < 5 * 60 * 1000);
             
             // Check admin checks
-            const isSenderAdmin = msg.sender?.role === 'admin' || msg.sender?.displayName === 'Professor (ADMIN)';
+            const isSenderAdmin = msg.sender?.role === 'admin' || msg.sender?.role === 'sub_admin' || msg.sender?.role === 'sub-admin' || msg.sender?.displayName === 'Professor (ADMIN)' || msg.sender?.displayName === 'Berlin';
 
             // Render Official Notice cards
             if (msg.messageType === 'notice') {

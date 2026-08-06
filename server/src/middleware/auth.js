@@ -24,7 +24,7 @@ export async function parseUser(req, res, next) {
         
         if (decoded && 
             (decoded.username === superAdminUsername || decoded.username === envAdminUsername || decoded.username === subAdminUsername) && 
-            (decoded.role === 'super_admin' || decoded.role === 'sub_admin')) {
+            (decoded.role === 'super_admin' || decoded.role === 'sub_admin' || decoded.role === 'sub-admin')) {
           isAdmin = true;
           adminUsernameFromToken = decoded.username;
         }

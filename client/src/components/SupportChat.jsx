@@ -7,7 +7,7 @@ import { Send, Image, MessageSquare, Clock, ShieldAlert } from 'lucide-react';
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export default function SupportChat() {
-  const { user, openLoginModal } = useContext(UserContext);
+  const { user, openLoginModal, isAdmin } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
 
@@ -175,7 +175,7 @@ export default function SupportChat() {
     e.preventDefault();
     if (!inputText.trim() && !selectedFile) return;
 
-    if (!user || (!user.isRegistered && user.role !== 'admin' && user.role !== 'sub-admin' && user.role !== 'sub_admin')) {
+    if (!isAdmin && (!user || !user.isRegistered)) {
       openLoginModal(() => {
         performSendSupportMessage();
       });

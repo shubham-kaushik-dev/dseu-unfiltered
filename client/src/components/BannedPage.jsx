@@ -8,7 +8,7 @@ import Logo from './Logo';
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export default function BannedPage() {
-  const { user, openLoginModal } = useContext(UserContext);
+  const { user, openLoginModal, isAdmin } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
 
@@ -181,7 +181,7 @@ export default function BannedPage() {
     e.preventDefault();
     if (!inputText.trim() && !selectedFile) return;
 
-    if (!user || (!user.isRegistered && user.role !== 'admin' && user.role !== 'sub-admin' && user.role !== 'sub_admin')) {
+    if (!isAdmin && (!user || !user.isRegistered)) {
       openLoginModal(() => {
         performSendSupportMessage();
       });

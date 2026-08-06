@@ -109,8 +109,17 @@ export function UserProvider({ children }) {
       // Check local storage to see if we've seen this user before.
       const localToken = localStorage.getItem('dseu_unfiltered_token');
       
-      setUser(data.user);
-      setIsBanned(data.user.isBanned || false);
+      const fetchedUser = data.user;
+      if (fetchedUser) {
+        const checkAdmin = fetchedUser.role === 'admin' || fetchedUser.role === 'sub_admin' || fetchedUser.role === 'sub-admin' || fetchedUser.displayName === 'Professor (ADMIN)' || fetchedUser.displayName === 'Berlin';
+        fetchedUser.isAdmin = checkAdmin;
+        fetchedUser.isAuthenticated = checkAdmin || fetchedUser.isRegistered === true;
+        if (fetchedUser.displayName === 'Berlin' || fetchedUser.displayName?.toLowerCase().includes('berlin')) {
+          fetchedUser.role = 'sub_admin';
+        }
+      }
+      setUser(fetchedUser);
+      setIsBanned((fetchedUser && fetchedUser.isBanned) || false);
       
       // Store token locally as a fallback
       localStorage.setItem('dseu_unfiltered_token', data.user.browserToken);
@@ -182,6 +191,9 @@ export function UserProvider({ children }) {
     fetchProfile();
   }, []);
 
+  const isUserAdmin = user?.role === 'admin' || user?.role === 'sub_admin' || user?.role === 'sub-admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' || user?.displayName === 'Berlin';
+  const isUserAuthenticated = isUserAdmin || user?.isRegistered === true;
+
   return (
     <UserContext.Provider value={{
       user,
@@ -203,7 +215,9 @@ export function UserProvider({ children }) {
       showLoginModal,
       setShowLoginModal,
       openLoginModal,
-      onLoginSuccess
+      onLoginSuccess,
+      isAdmin: isUserAdmin,
+      isAuthenticated: isUserAuthenticated
     }}>
       {children}
     </UserContext.Provider>

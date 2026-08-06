@@ -22,15 +22,14 @@ import {
 } from 'lucide-react';
 
 export default function DashboardPage({ onOpenRules }) {
-  const { user, isBanned, openLoginModal, logout } = useContext(UserContext);
+  const { user, isBanned, openLoginModal, logout, isAdmin } = useContext(UserContext);
   const { socket, onlineCount, pinnedAnnouncement, setPinnedAnnouncement } = useContext(SocketContext);
-  const isUserAdmin = user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' || user?.displayName === 'Berlin';
   const adminDisplayName = user?.displayName || '';
+  const isUserAdmin = isAdmin;
   const isBerlin = adminDisplayName === 'Berlin' || adminDisplayName.toLowerCase().includes('berlin');
   const userAvatar = isUserAdmin ? (isBerlin ? berlinAvatar : professorAvatar) : null;
   
   const [activeTab, setActiveTab] = useState('chat');
-  const [isAdmin, setIsAdmin] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   
@@ -226,7 +225,7 @@ export default function DashboardPage({ onOpenRules }) {
             case 'support':
               return <SupportChat />;
             case 'admin':
-              return <AdminPanel onAdminStateChange={setIsAdmin} />;
+              return <AdminPanel onAdminStateChange={() => {}} />;
             default:
               return <ChatBox isAdmin={isAdmin} />;
           }
