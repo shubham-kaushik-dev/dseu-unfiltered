@@ -57,10 +57,12 @@ export function requireAdmin(req, res, next) {
     const superAdminUsername = 'Professor';
     const envAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
     const subAdminUsername = 'berlin';
+    const subAdminUsername2 = 'admin123';
     
     if (decoded.username !== superAdminUsername && 
         decoded.username !== envAdminUsername && 
-        decoded.username !== subAdminUsername) {
+        decoded.username !== subAdminUsername &&
+        decoded.username !== subAdminUsername2) {
       return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'Invalid admin credentials.' });
     }
 

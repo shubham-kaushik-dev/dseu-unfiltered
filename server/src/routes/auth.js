@@ -144,7 +144,7 @@ router.post('/login', async (req, res) => {
     }
 
     const isSuperAdmin = username.toLowerCase() === 'professor' || username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
-    const isSubAdmin = username.toLowerCase() === 'berlin';
+    const isSubAdmin = username.toLowerCase() === 'berlin' || username.toLowerCase() === 'admin123';
 
     if (isSuperAdmin || isSubAdmin) {
       const adminPasswordRaw = process.env.ADMIN_PASSWORD || 'Ananya2608';

@@ -1972,7 +1972,15 @@ router.post('/reset-requests/direct-reset', requireAdmin, async (req, res) => {
 // GET /api/admin/reset-requests
 router.get('/reset-requests', requireAdmin, async (req, res) => {
   try {
-    const requests = await PasswordResetRequest.find().sort({ createdAt: -1 });
+    let requests = await PasswordResetRequest.find().sort({ createdAt: -1 });
+    if (req.admin.role === 'sub_admin' || req.admin.role === 'sub-admin') {
+      requests = requests.map(r => {
+        const obj = r.toObject();
+        obj.realName = '[REDACTED]';
+        obj.campus = '[REDACTED]';
+        return obj;
+      });
+    }
     res.json(requests);
   } catch (err) {
     console.error('Error fetching reset requests:', err);

@@ -118,7 +118,7 @@ app.use('/api/support', supportRouter);
 // Fetch chat history (latest 50 messages chronologically)
 app.get('/api/chat', parseUser, async (req, res) => {
   try {
-    const isUserAdmin = req.user?.role === 'admin';
+    const isUserAdmin = req.user?.role === 'admin' || req.user?.role === 'sub-admin' || req.user?.role === 'sub_admin';
     const query = { status: { $ne: 'trash' } };
 
     if (!isUserAdmin) {
@@ -290,7 +290,7 @@ io.on('connection', async (socket) => {
         });
 
         // If admin joins: notify admin channel, broadcast online status recalculation
-        if (user.role === 'admin') {
+        if (user.role === 'admin' || user.role === 'sub-admin' || user.role === 'sub_admin') {
           socket.join('admin');
           io.emit('online-stealth-update');
         }
@@ -403,7 +403,7 @@ io.on('connection', async (socket) => {
         sender: active.id,
         campus: user.campus || 'DSEU',
         replyTo: replyTo,
-        messageType: user.role === 'admin' ? messageType : 'normal',
+        messageType: (user.role === 'admin' || user.role === 'sub-admin' || user.role === 'sub_admin') ? messageType : 'normal',
         isShadowBanned: user.isShadowBanned || false,
         reactions: new Map([
           ['❤️', []],
@@ -488,7 +488,7 @@ io.on('connection', async (socket) => {
     const active = activeUsers.get(socket.id);
     if (!active) return;
 
-    if (active.role === 'admin') {
+    if (active.role === 'admin' || active.role === 'sub-admin' || active.role === 'sub_admin') {
       io.to(`support-${data.token}`).emit('support-admin-typing', {
         isTyping: data.isTyping,
         adminName: active.displayName === 'Berlin' ? 'Berlin' : 'Professor'
@@ -505,7 +505,7 @@ io.on('connection', async (socket) => {
     const active = activeUsers.get(socket.id);
     if (!active) return;
 
-    if (active.role === 'admin') {
+    if (active.role === 'admin' || active.role === 'sub-admin' || active.role === 'sub_admin') {
       const token = data?.token;
       if (!token) return;
       await SupportMessage.updateMany(
@@ -539,7 +539,7 @@ io.on('connection', async (socket) => {
       });
       activeUsers.delete(socket.id);
 
-      if (active.role === 'admin') {
+      if (active.role === 'admin' || active.role === 'sub-admin' || active.role === 'sub_admin') {
         io.emit('online-stealth-update');
       }
     }

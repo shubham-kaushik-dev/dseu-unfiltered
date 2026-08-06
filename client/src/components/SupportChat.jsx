@@ -175,7 +175,7 @@ export default function SupportChat() {
     e.preventDefault();
     if (!inputText.trim() && !selectedFile) return;
 
-    if (!user || (!user.isRegistered && user.role !== 'admin')) {
+    if (!user || (!user.isRegistered && user.role !== 'admin' && user.role !== 'sub-admin' && user.role !== 'sub_admin')) {
       openLoginModal(() => {
         performSendSupportMessage();
       });

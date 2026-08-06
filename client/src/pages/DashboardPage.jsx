@@ -241,7 +241,7 @@ export default function DashboardPage({ onOpenRules }) {
     { id: 'confessions', label: 'Confessions', icon: HeartHandshake },
     { id: 'memes', label: 'Meme Board', icon: ImageIcon },
     { id: 'polls', label: 'Campus Polls', icon: BarChart3 },
-    ...((user?.isRegistered || user?.role === 'admin') ? [{ id: 'support', label: 'Contact Professor', icon: HelpCircle }] : []),
+    ...((user?.isRegistered || user?.role === 'admin' || user?.role === 'sub-admin' || user?.role === 'sub_admin') ? [{ id: 'support', label: 'Contact Professor', icon: HelpCircle }] : []),
     { id: 'rules', label: 'Rules & Regulations', icon: Shield },
     { id: 'admin', label: 'Admin Moderation', icon: ShieldAlert }
   ];
@@ -348,7 +348,7 @@ export default function DashboardPage({ onOpenRules }) {
 
           {/* User Auth Actions */}
           <div className="flex gap-2">
-            {(user?.isRegistered || user?.role === 'admin') ? (
+            {(user?.isRegistered || user?.role === 'admin' || user?.role === 'sub-admin' || user?.role === 'sub_admin') ? (
               <>
                 <button
                   onClick={() => setShowProfileModal(true)}
@@ -477,10 +477,19 @@ export default function DashboardPage({ onOpenRules }) {
             <div className="flex flex-col leading-none">
               <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">IDENTITY ESTABLISHED</span>
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-[16px] font-bold text-slate-800 flex items-center gap-1.5">
-                  🐼 {user?.displayName}
+                <span className="text-[16px] font-bold text-slate-800 flex items-center gap-1.5 animate-fade-in">
+                  {isUserAdmin ? (
+                    <>
+                      <span>{isBerlin ? 'Berlin' : 'Professor'}</span>
+                      <span className="text-[9px] font-black bg-gradient-to-r from-purple-650 to-amber-600 bg-clip-text text-transparent px-1.5 py-0.5 border border-purple-500/30 rounded uppercase tracking-wider font-mono select-none">
+                        {isBerlin ? 'SUB ADMIN' : 'ADMIN'}
+                      </span>
+                    </>
+                  ) : (
+                    <>🐼 {user?.displayName}</>
+                  )}
                 </span>
-                {!(user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)') && (
+                {!isUserAdmin && (
                   <button
                     onClick={handleResetIdentity}
                     className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded transition cursor-pointer"

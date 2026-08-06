@@ -215,7 +215,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
     e.preventDefault();
     if (inputText.trim() === '' || cooldown > 0) return;
 
-    if (!user || (!user.isRegistered && user.role !== 'admin')) {
+    if (!user || (!user.isRegistered && user.role !== 'admin' && user.role !== 'sub-admin' && user.role !== 'sub_admin')) {
       openLoginModal(() => {
         socket.emit('send-chat-message', {
           text: inputText,

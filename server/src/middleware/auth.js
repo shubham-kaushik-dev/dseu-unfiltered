@@ -43,10 +43,23 @@ export async function parseUser(req, res, next) {
           user = await User.create({
             browserToken: 'admin-token-fixed-value-berlin-2026',
             displayName: 'Berlin',
-            role: 'admin',
+            role: 'sub-admin',
             isRegistered: true,
             campus: 'DSEU'
           });
+        } else {
+          let changed = false;
+          if (user.role !== 'sub-admin') {
+            user.role = 'sub-admin';
+            changed = true;
+          }
+          if (!user.isRegistered) {
+            user.isRegistered = true;
+            changed = true;
+          }
+          if (changed) {
+            await user.save();
+          }
         }
       } else {
         user = await User.findOne({ role: 'admin', displayName: { $ne: 'Berlin' } });
@@ -79,8 +92,8 @@ export async function parseUser(req, res, next) {
       }
 
       if (token) {
-        // Find existing user, ensuring we never match the admin user dynamically from random tokens
-        user = await User.findOne({ browserToken: token, role: { $ne: 'admin' } });
+        // Find existing user (allow matching admins by their browserToken)
+        user = await User.findOne({ browserToken: token });
       }
 
       // 3. If no token or user exists, auto-register a new anonymous user

@@ -132,6 +132,11 @@ export function UserProvider({ children }) {
 
   const logout = async () => {
     localStorage.removeItem('dseu_unfiltered_token');
+    localStorage.removeItem('dseu_admin_jwt');
+    localStorage.removeItem('dseu_admin_role');
+    localStorage.removeItem('dseu_admin_csrf_token');
+    _setAdminJwt('');
+    _setAdminCsrfToken('');
     setUser(null);
     await fetchProfile();
   };

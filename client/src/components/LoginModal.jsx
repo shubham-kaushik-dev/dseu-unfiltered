@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { UserContext } from '../context/UserContext';
 import { ToastContext } from '../context/ToastContext';
 import Logo from './Logo';
@@ -55,6 +55,12 @@ export default function LoginModal({ isOpen, onClose, onSuccess, originalMessage
   const [recoveryReason, setRecoveryReason] = useState('');
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setIsDropdownOpen(false);
+    setDropdownSearch('');
+    setHighlightedIndex(0);
+  }, [view]);
 
   if (!isOpen) return null;
 
@@ -479,15 +485,110 @@ export default function LoginModal({ isOpen, onClose, onSuccess, originalMessage
               <div>
                 <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Registered Campus</label>
                 <div className="relative">
-                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  {/* Hidden input to keep it required in the HTML form validation */}
                   <input
                     type="text"
                     required
-                    placeholder="Enter your registered Campus"
                     value={campus}
-                    onChange={(e) => setCampus(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500/50 focus:bg-white transition"
+                    className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+                    tabIndex={-1}
+                    onChange={() => {}}
                   />
+                  
+                  {/* Trigger Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDropdownOpen(!isDropdownOpen);
+                      setDropdownSearch('');
+                      setHighlightedIndex(0);
+                    }}
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-sm font-semibold text-left text-slate-800 focus:outline-none focus:border-purple-500/50 transition flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <span className={campus ? 'text-slate-800' : 'text-slate-400'}>
+                        {campus || 'Select your DSEU Campus'}
+                      </span>
+                    </div>
+                    <span className="text-slate-400 text-xs">▼</span>
+                  </button>
+
+                  {/* Click-outside backdrop overlay */}
+                  {isDropdownOpen && (
+                    <div 
+                      className="fixed inset-0 z-40 bg-transparent" 
+                      onClick={() => setIsDropdownOpen(false)}
+                    />
+                  )}
+
+                  {/* Floating Searchable Panel */}
+                  {isDropdownOpen && (
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col max-h-60">
+                      {/* Search Box */}
+                      <div className="p-2 border-b border-slate-100 bg-slate-50/50">
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Type to search..."
+                          value={dropdownSearch}
+                          onChange={(e) => {
+                            setDropdownSearch(e.target.value);
+                            setHighlightedIndex(0);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setHighlightedIndex(prev => 
+                                prev < filteredCampuses.length - 1 ? prev + 1 : prev
+                              );
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setHighlightedIndex(prev => (prev > 0 ? prev - 1 : 0));
+                            } else if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (filteredCampuses[highlightedIndex]) {
+                                setCampus(filteredCampuses[highlightedIndex]);
+                                setIsDropdownOpen(false);
+                              }
+                            } else if (e.key === 'Escape') {
+                              setIsDropdownOpen(false);
+                            }
+                          }}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500/50 transition"
+                        />
+                      </div>
+
+                      {/* Options List */}
+                      <div className="overflow-y-auto flex-1 max-h-44 py-1 divide-y divide-slate-50">
+                        {filteredCampuses.length === 0 ? (
+                          <div className="px-4 py-3 text-xs text-slate-400 text-center font-medium">
+                            No campuses found
+                          </div>
+                        ) : (
+                          filteredCampuses.map((item, idx) => (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => {
+                                setCampus(item);
+                                setIsDropdownOpen(false);
+                              }}
+                              onMouseEnter={() => setHighlightedIndex(idx)}
+                              className={`w-full text-left px-4 py-2 text-xs font-semibold transition cursor-pointer flex items-center justify-between ${
+                                idx === highlightedIndex 
+                                  ? 'bg-purple-50 text-purple-700' 
+                                  : 'text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span>{item}</span>
+                              {campus === item && <span className="text-purple-600 font-bold">✓</span>}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
