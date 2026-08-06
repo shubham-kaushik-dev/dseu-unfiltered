@@ -10,6 +10,7 @@ import LoginModal from './components/LoginModal';
 const AdminPanel = React.lazy(() => import('./components/AdminPanel'));
 import Logo from './components/Logo';
 import { ShieldCheck, HardHat, Lock } from 'lucide-react';
+import CommunityRulesModal from './components/CommunityRulesModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -30,6 +31,16 @@ function AppContent() {
   const { showToast } = useContext(ToastContext);
   
   const [entered, setEntered] = useState(false);
+  const [showRules, setShowRules] = useState(() => {
+    return localStorage.getItem('dseu_rules_accepted') !== '1.0';
+  });
+
+  useEffect(() => {
+    const accepted = localStorage.getItem('dseu_rules_accepted') === '1.0';
+    if (!accepted) {
+      setShowRules(true);
+    }
+  }, [user]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -165,6 +176,11 @@ function AppContent() {
         )}
       </div>
     );
+  }
+
+  // 2.5. Render Community Rules Modal if not accepted
+  if (showRules) {
+    return <CommunityRulesModal isOpen={showRules} onAccept={() => setShowRules(false)} />;
   }
 
   // 3. Normal Flow
