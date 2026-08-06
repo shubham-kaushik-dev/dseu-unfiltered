@@ -340,7 +340,7 @@ router.post('/accept-rules', parseUser, async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ error: 'UNAUTHORIZED', message: 'You must be logged in to accept rules.' });
     }
-    req.user.rulesAcceptedVersion = '1.0';
+    req.user.rulesAcceptedVersion = req.body.version || '1.0';
     await req.user.save();
     res.json({ message: 'Rules accepted successfully.' });
   } catch (err) {

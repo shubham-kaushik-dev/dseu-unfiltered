@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { UserContext, UserProvider } from './context/UserContext';
 import { SocketContext, SocketProvider } from './context/SocketContext';
 import { ToastProvider, ToastContext } from './context/ToastContext';
@@ -31,31 +31,30 @@ function AppContent() {
   const { showToast } = useContext(ToastContext);
   
   const [entered, setEntered] = useState(false);
-  const [showRules, setShowRules] = useState(() => {
-    return localStorage.getItem('dseu_rules_accepted') !== '1.0';
-  });
+  const COMMUNITY_RULES_VERSION = "1.0";
+  const hasCheckedRules = useRef(false);
+  const [showRules, setShowRules] = useState(false);
 
   useEffect(() => {
     if (loading) return;
+    if (hasCheckedRules.current) return;
+
+    hasCheckedRules.current = true;
 
     if (user && user.isRegistered) {
-      if (user.rulesAcceptedVersion !== '1.0') {
+      if (user.rulesAcceptedVersion !== COMMUNITY_RULES_VERSION) {
         setShowRules(true);
-      } else {
-        setShowRules(false);
       }
     } else {
-      const localAccepted = localStorage.getItem('dseu_rules_accepted') === '1.0';
-      if (!localAccepted) {
+      const localAcceptedVersion = localStorage.getItem('communityRulesAcceptedVersion');
+      if (localAcceptedVersion !== COMMUNITY_RULES_VERSION) {
         setShowRules(true);
-      } else {
-        setShowRules(false);
       }
     }
   }, [user, loading]);
 
   const handleAcceptRules = async () => {
-    localStorage.setItem('dseu_rules_accepted', '1.0');
+    localStorage.setItem('communityRulesAcceptedVersion', COMMUNITY_RULES_VERSION);
     setShowRules(false);
 
     if (user && user.isRegistered) {
@@ -66,7 +65,8 @@ function AppContent() {
           headers: {
             'Authorization': `Bearer ${jwtToken}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: JSON.stringify({ version: COMMUNITY_RULES_VERSION })
         });
         refreshProfile();
       } catch (err) {
