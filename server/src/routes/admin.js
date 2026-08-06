@@ -1042,6 +1042,7 @@ router.get('/support/conversations', requireAdmin, async (req, res) => {
     const tokens = await SupportMessage.distinct('browserToken');
 
     const conversationList = [];
+    const activeUsers = req.app.get('activeUsers') || new Map();
     const onlineTokens = Array.from(activeUsers.values()).map(u => u.browserToken);
 
     for (const token of tokens) {
