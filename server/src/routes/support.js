@@ -136,6 +136,7 @@ router.post('/message', parseUser, (req, res, next) => {
         type: 'support_request',
         data: { browserToken: token }
       });
+      io.to('admin').emit('admin-notifications-updated');
     }
 
     res.status(201).json(message);

@@ -89,6 +89,41 @@ export default function AdminPanel({ onAdminStateChange }) {
   const [resetsLoading, setResetsLoading] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Unread Notification Counts State
+  const [unreadCounts, setUnreadCounts] = useState({
+    support: 0,
+    resets: 0,
+    users: 0,
+    reports: 0
+  });
+
+  const fetchUnreadCounts = async () => {
+    try {
+      const res = await adminFetch('/api/admin/notifications/unread-counts');
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCounts(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch unread counts:', err);
+    }
+  };
+
+  const markSectionAsRead = async (section) => {
+    try {
+      const res = await adminFetch('/api/admin/notifications/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section })
+      });
+      if (res.ok) {
+        fetchUnreadCounts();
+      }
+    } catch (err) {
+      console.error('Failed to mark section as read:', err);
+    }
+  };
+
   // Settings State
   const [settings, setSettings] = useState({
     website_name: '',
@@ -174,6 +209,27 @@ export default function AdminPanel({ onAdminStateChange }) {
     else if (activeTab === 'announcements') fetchAnnouncementsHistory();
     else if (activeTab === 'logs') fetchAuditLogs();
   }, [activeTab, adminLoggedIn, usersPage, usersFilter, usersSort, supportPage, supportFilter, announcementPage, announcementFilter, regPage, regCampus, regBan, regSortBy, regSortOrder]);
+
+  // Handle notification marking as read when entering sections
+  useEffect(() => {
+    if (!adminLoggedIn) return;
+    if (activeTab === 'support') {
+      markSectionAsRead('support');
+    } else if (activeTab === 'resets') {
+      markSectionAsRead('resets');
+    } else if (activeTab === 'registered') {
+      markSectionAsRead('users');
+    } else if (activeTab === 'reports') {
+      markSectionAsRead('reports');
+    }
+  }, [activeTab, adminLoggedIn]);
+
+  // Initial notification fetch
+  useEffect(() => {
+    if (adminLoggedIn) {
+      fetchUnreadCounts();
+    }
+  }, [adminLoggedIn]);
 
   // Sync users list whenever search query changes (debounced)
   useEffect(() => {
@@ -265,6 +321,10 @@ export default function AdminPanel({ onAdminStateChange }) {
       fetchUsers();
     });
 
+    socket.on('admin-notifications-updated', () => {
+      fetchUnreadCounts();
+    });
+
     return () => {
       socket.off('admin-stats-update');
       socket.off('moderation-activity');
@@ -272,6 +332,7 @@ export default function AdminPanel({ onAdminStateChange }) {
       socket.off('support-message');
       socket.off('support-messages-seen');
       socket.off('new-user-registered');
+      socket.off('admin-notifications-updated');
     };
   }, [socket, adminLoggedIn, selectedConversationToken, csrfToken]);
 
@@ -1032,6 +1093,12 @@ export default function AdminPanel({ onAdminStateChange }) {
           { id: 'logs', label: 'Audit Trail', icon: FileText }
         ].map((tab) => {
           const Icon = tab.icon;
+          let count = 0;
+          if (tab.id === 'support') count = unreadCounts.support;
+          else if (tab.id === 'resets') count = unreadCounts.resets;
+          else if (tab.id === 'registered') count = unreadCounts.users;
+          else if (tab.id === 'reports') count = unreadCounts.reports;
+
           return (
             <button
               key={tab.id}
@@ -1044,6 +1111,11 @@ export default function AdminPanel({ onAdminStateChange }) {
             >
               <Icon className="h-4 w-4" />
               <span>{tab.label}</span>
+              {count > 0 && (
+                <span className="px-1.5 py-0.5 text-[9px] font-black bg-red-600 text-white rounded-full leading-none flex items-center justify-center min-w-[16px] h-4">
+                  {count >= 10 ? '9+' : count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -1353,33 +1425,33 @@ export default function AdminPanel({ onAdminStateChange }) {
                   {/* Private Metadata Grid */}
                   <div className="grid grid-cols-2 gap-4 bg-zinc-950/40 p-4 border border-zinc-850 rounded-2xl text-xs text-zinc-400">
                     <div>
-                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Real Name</span>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Real Name</span>
                       <span className="text-sm font-black text-white mt-1 block">{regUserDetails.user.realName}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Campus</span>
-                      <span className="text-sm font-semibold text-zinc-350 mt-1 block">{regUserDetails.user.campus}</span>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Campus</span>
+                      <span className="text-sm font-semibold text-white mt-1 block">{regUserDetails.user.campus}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Registration Date</span>
-                      <span className="font-medium text-zinc-305 mt-1 block">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Registration Date</span>
+                      <span className="font-medium text-white mt-1 block">
                         {regUserDetails.user.registrationDate ? new Date(regUserDetails.user.registrationDate).toLocaleDateString() : 'N/A'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Last Login</span>
-                      <span className="font-medium text-zinc-355 mt-1 block">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Last Login</span>
+                      <span className="font-medium text-white mt-1 block">
                         {regUserDetails.user.lastLogin ? new Date(regUserDetails.user.lastLogin).toLocaleDateString() : 'Never'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Last Seen</span>
-                      <span className="font-medium text-zinc-355 mt-1 block">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Last Seen</span>
+                      <span className="font-medium text-white mt-1 block">
                         {regUserDetails.user.lastActive ? new Date(regUserDetails.user.lastActive).toLocaleDateString() : 'Offline'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-zinc-650 font-bold uppercase tracking-wider block">Ban Status</span>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Ban Status</span>
                       <span className={`font-black mt-1 block uppercase ${regUserDetails.user.isBanned ? 'text-red-400' : 'text-emerald-400'}`}>
                         {regUserDetails.user.isBanned ? 'Banned' : 'Active'}
                       </span>
@@ -1390,13 +1462,13 @@ export default function AdminPanel({ onAdminStateChange }) {
                   <div className="grid grid-cols-5 gap-3 text-center">
                     {[
                       { label: 'Warnings', value: regUserDetails.warningCount, color: 'text-amber-400' },
-                      { label: 'Messages', value: regUserDetails.totalMessages, color: 'text-zinc-200' },
-                      { label: 'Confessions', value: regUserDetails.totalConfessions, color: 'text-zinc-200' },
-                      { label: 'Memes', value: regUserDetails.totalMemes, color: 'text-zinc-200' },
-                      { label: 'Polls', value: regUserDetails.totalPolls, color: 'text-zinc-200' }
+                      { label: 'Messages', value: regUserDetails.totalMessages, color: 'text-white' },
+                      { label: 'Confessions', value: regUserDetails.totalConfessions, color: 'text-white' },
+                      { label: 'Memes', value: regUserDetails.totalMemes, color: 'text-white' },
+                      { label: 'Polls', value: regUserDetails.totalPolls, color: 'text-white' }
                     ].map((stat, i) => (
                       <div key={i} className="p-3 bg-[#0e0f14] border border-zinc-850 rounded-xl">
-                        <span className="text-[9px] text-zinc-650 font-bold uppercase tracking-wider block leading-none">{stat.label}</span>
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider block leading-none">{stat.label}</span>
                         <span className={`text-lg font-black mt-1 block leading-none ${stat.color}`}>{stat.value}</span>
                       </div>
                     ))}

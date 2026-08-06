@@ -5,11 +5,19 @@ import { parseUser } from '../middleware/auth.js';
 import User from '../models/User.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import SupportMessage from '../models/SupportMessage.js';
+import AdminNotification from '../models/AdminNotification.js';
 
 const router = express.Router();
 
 // GET /api/auth/me
 router.get('/me', parseUser, (req, res) => {
+  res.cookie('dseu_unfiltered_token', req.user.browserToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 365 * 24 * 60 * 60 * 1000 // 1 year
+  });
+
   res.json({
     user: {
       id: req.user._id,
@@ -81,6 +89,25 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    await AdminNotification.create({
+      text: `New student registered: ${displayName} (${realName})`,
+      type: 'new_user',
+      data: { userId: user._id }
+    });
+
+    const getIo = (r) => r.app.get('io');
+    const io = getIo(req);
+    if (io) {
+      io.to('admin').emit('admin-notifications-updated');
+    }
+
+    res.cookie('dseu_unfiltered_token', user.browserToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 1 year
+    });
+
     res.json({
       message: 'Account registered successfully.',
       token: user.browserToken,
@@ -121,6 +148,13 @@ router.post('/login', async (req, res) => {
 
     user.lastLogin = new Date();
     await user.save();
+
+    res.cookie('dseu_unfiltered_token', user.browserToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 1 year
+    });
 
     res.json({
       token: user.browserToken,
@@ -238,6 +272,12 @@ router.post('/reset-request', async (req, res) => {
       reason
     });
 
+    await AdminNotification.create({
+      text: `Password reset request from ${username}`,
+      type: 'reset_request',
+      data: { username }
+    });
+
     const msgText = `Password Reset Request
 
 Username: ${username}
@@ -275,6 +315,7 @@ Please wait while the administrator verifies your identity.`;
         text: msgText,
         createdAt: new Date()
       });
+      io.to('admin').emit('admin-notifications-updated');
     }
 
     res.json({ 

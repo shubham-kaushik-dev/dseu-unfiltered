@@ -83,6 +83,12 @@ export default function BannedPage() {
       socket.on('settings-updated', checkAdminPresence);
       socket.on('online-stealth-update', checkAdminPresence);
 
+      socket.on('user-unbanned-alert', (token) => {
+        if (user?.browserToken === token) {
+          window.location.reload();
+        }
+      });
+
       // Notify seen upon load
       socket.emit('support-seen');
 
@@ -92,6 +98,7 @@ export default function BannedPage() {
         socket.off('support-messages-seen');
         socket.off('settings-updated');
         socket.off('online-stealth-update');
+        socket.off('user-unbanned-alert');
       };
     }
   }, [socket, user.browserToken]);

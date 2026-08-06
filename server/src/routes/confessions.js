@@ -1,6 +1,7 @@
 import express from 'express';
 import Confession from '../models/Confession.js';
 import Report from '../models/Report.js';
+import AdminNotification from '../models/AdminNotification.js';
 import { parseUser, requireAuth } from '../middleware/auth.js';
 import { postingLimiter, interactionLimiter } from '../middleware/rateLimiter.js';
 import { filterProfanity } from '../utils/profanity.js';
@@ -211,6 +212,12 @@ router.post('/:id/report', parseUser, requireAuth, interactionLimiter, async (re
       reporterToken: req.user.browserToken
     });
 
+    await AdminNotification.create({
+      text: `Confession reported: ${reason}`,
+      type: 'new_report',
+      data: { reportId: report._id }
+    });
+
     // Notify Admin via sockets in real time
     const io = getIo(req);
     if (io) {
@@ -224,6 +231,7 @@ router.post('/:id/report', parseUser, requireAuth, interactionLimiter, async (re
       // Update admin stats count in real time
       const totalReports = await Report.countDocuments({ status: 'pending' });
       io.to('admin').emit('admin-stats-update', { totalReports });
+      io.to('admin').emit('admin-notifications-updated');
     }
 
     res.status(201).json({ message: 'Confession reported successfully.' });

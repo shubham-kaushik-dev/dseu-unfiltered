@@ -6,6 +6,7 @@ import path from 'path';
 import crypto from 'crypto';
 import Meme from '../models/Meme.js';
 import Report from '../models/Report.js';
+import AdminNotification from '../models/AdminNotification.js';
 import { parseUser, requireAuth } from '../middleware/auth.js';
 import { postingLimiter, interactionLimiter } from '../middleware/rateLimiter.js';
 import { filterProfanity } from '../utils/profanity.js';
@@ -306,6 +307,12 @@ router.post('/:id/report', parseUser, requireAuth, interactionLimiter, async (re
       reporterToken: req.user.browserToken
     });
 
+    await AdminNotification.create({
+      text: `Meme reported: ${reason}`,
+      type: 'new_report',
+      data: { reportId: report._id }
+    });
+
     const io = getIo(req);
     if (io) {
       io.to('admin').emit('new-report', report);
@@ -317,6 +324,7 @@ router.post('/:id/report', parseUser, requireAuth, interactionLimiter, async (re
       
       const totalReports = await Report.countDocuments({ status: 'pending' });
       io.to('admin').emit('admin-stats-update', { totalReports });
+      io.to('admin').emit('admin-notifications-updated');
     }
 
     res.status(201).json({ message: 'Meme reported successfully.' });

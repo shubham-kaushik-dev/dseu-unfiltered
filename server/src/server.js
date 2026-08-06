@@ -279,6 +279,7 @@ io.on('connection', async (socket) => {
         }
 
         socket.join(`support-${token}`);
+        socket.join('public-chat');
 
         activeUsers.set(socket.id, {
           id: user._id,

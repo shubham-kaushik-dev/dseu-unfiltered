@@ -32,6 +32,55 @@ import { generateUniqueIdentity } from '../utils/identity.js';
 const router = express.Router();
 const getIo = (req) => req.app.get('io');
 
+const sendSystemSupportMessage = async (browserToken, text, req) => {
+  try {
+    await SupportMessage.create({
+      browserToken,
+      senderType: 'admin',
+      senderName: 'Professor (ADMIN)',
+      text,
+      isSeen: false
+    });
+    const io = getIo(req);
+    if (io) {
+      io.to(`support-${browserToken}`).emit('support-message', {
+        browserToken,
+        senderType: 'admin',
+        senderName: 'Professor (ADMIN)',
+        text,
+        createdAt: new Date()
+      });
+    }
+  } catch (err) {
+    console.error('Failed to send system support message:', err);
+  }
+};
+
+const getOnlineCount = async (req) => {
+  const io = getIo(req);
+  if (!io) return 0;
+  let count = io.sockets.sockets.size;
+  try {
+    const stealthSetting = await Settings.findOne({ key: 'stealth_mode' });
+    const isStealth = stealthSetting ? stealthSetting.value : false;
+
+    if (isStealth) {
+      const adminUser = await User.findOne({ role: 'admin' });
+      if (adminUser) {
+        const activeUsers = req.app.get('activeUsers') || new Map();
+        const activeSocks = Array.from(activeUsers.values());
+        const hasAdmin = activeSocks.some(u => u.browserToken === adminUser.browserToken);
+        if (hasAdmin) {
+          count = Math.max(0, count - 1);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error calculating online count in admin:', err);
+  }
+  return count;
+};
+
 const isCloudinaryConfigured = () => {
   return !!(
     process.env.CLOUDINARY_CLOUD_NAME &&
@@ -173,6 +222,48 @@ router.post('/logout', async (req, res) => {
 // GET /api/admin/check
 router.get('/check', requireAdmin, (req, res) => {
   res.json({ username: req.admin.username, csrfToken: req.admin.csrfToken });
+});
+
+// GET /api/admin/notifications/unread-counts
+router.get('/notifications/unread-counts', requireAdmin, async (req, res) => {
+  try {
+    const support = await AdminNotification.countDocuments({ type: 'support_request', isRead: false });
+    const resets = await AdminNotification.countDocuments({ type: 'reset_request', isRead: false });
+    const users = await AdminNotification.countDocuments({ type: 'new_user', isRead: false });
+    const reports = await AdminNotification.countDocuments({ type: 'new_report', isRead: false });
+    res.json({ support, resets, users, reports });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to count unread notifications.' });
+  }
+});
+
+// POST /api/admin/notifications/mark-read
+router.post('/notifications/mark-read', requireAdmin, async (req, res) => {
+  try {
+    const { section } = req.body;
+    let type = '';
+    if (section === 'support') type = 'support_request';
+    else if (section === 'resets') type = 'reset_request';
+    else if (section === 'users') type = 'new_user';
+    else if (section === 'reports') type = 'new_report';
+    else {
+      return res.status(400).json({ message: 'Invalid section.' });
+    }
+
+    await AdminNotification.updateMany({ type, isRead: false }, { isRead: true });
+
+    // Emit update so other admin sessions sync
+    const io = getIo(req);
+    if (io) {
+      io.to('admin').emit('admin-notifications-updated');
+    }
+
+    res.json({ message: 'Notifications marked as read.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to mark notifications as read.' });
+  }
 });
 
 // GET /api/admin/stats - Live counters and status indicators
@@ -583,6 +674,11 @@ router.post('/user/bulk-action', requireAdmin, async (req, res) => {
           user.bannedBy = 'Professor';
           user.banDate = new Date();
           await user.save();
+
+          const reasonText = banReason || 'Violated community guidelines';
+          const banMsg = `🚫 Your account has been banned.\n\nReason:\n${reasonText}\n\nIf you believe this is a mistake, you can reply here to appeal your ban.`;
+          await sendSystemSupportMessage(user.browserToken, banMsg, req);
+
           if (io) {
             io.emit('user-banned-alert', user.browserToken);
           }
@@ -592,6 +688,13 @@ router.post('/user/bulk-action', requireAdmin, async (req, res) => {
           user.bannedBy = '';
           user.banDate = null;
           await user.save();
+
+          const unbanMsg = `✅ Your account has been unbanned.\n\nWelcome back.\n\nAll your account data, chats, confessions, memes and activity have been restored.\n\nPlease continue following community rules.`;
+          await sendSystemSupportMessage(user.browserToken, unbanMsg, req);
+
+          if (io) {
+            io.emit('user-unbanned-alert', user.browserToken);
+          }
         } else if (action === 'mute') {
           const mins = parseInt(durationMinutes) || 60;
           const mutedUntil = new Date(Date.now() + mins * 60 * 1000);
@@ -644,6 +747,63 @@ router.post('/user/bulk-action', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error performing bulk actions:', error);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to process bulk actions.' });
+  }
+});
+
+// POST /api/admin/users/:id/:action - Ban or Unban a specific user
+router.post('/users/:id/:action', requireAdmin, async (req, res) => {
+  try {
+    const { id, action } = req.params;
+    const { banReason } = req.body || {};
+
+    if (action !== 'ban' && action !== 'unban') {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'Invalid action parameter.' });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
+    }
+
+    const io = getIo(req);
+
+    if (action === 'ban') {
+      user.isBanned = true;
+      user.banReason = banReason || 'Violated community guidelines';
+      user.bannedBy = 'Professor';
+      user.banDate = new Date();
+      await user.save();
+
+      const reasonText = banReason || 'Violated community guidelines';
+      const banMsg = `🚫 Your account has been banned.\n\nReason:\n${reasonText}\n\nIf you believe this is a mistake, you can reply here to appeal your ban.`;
+      await sendSystemSupportMessage(user.browserToken, banMsg, req);
+
+      if (io) {
+        io.emit('user-banned-alert', user.browserToken);
+        io.emit('online-stealth-update');
+        io.emit('online-count', await getOnlineCount(req));
+      }
+    } else if (action === 'unban') {
+      user.isBanned = false;
+      user.banReason = '';
+      user.bannedBy = '';
+      user.banDate = null;
+      await user.save();
+
+      const unbanMsg = `✅ Your account has been unbanned.\n\nWelcome back.\n\nAll your account data, chats, confessions, memes and activity have been restored.\n\nPlease continue following community rules.`;
+      await sendSystemSupportMessage(user.browserToken, unbanMsg, req);
+
+      if (io) {
+        io.emit('user-unbanned-alert', user.browserToken);
+        io.emit('online-stealth-update');
+        io.emit('online-count', await getOnlineCount(req));
+      }
+    }
+
+    res.json({ message: `User successfully ${action === 'ban' ? 'banned' : 'unbanned'}.`, user });
+  } catch (error) {
+    console.error('Error updating ban status:', error);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update ban status.' });
   }
 });
 
