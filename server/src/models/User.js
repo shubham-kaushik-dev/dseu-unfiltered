@@ -89,6 +89,10 @@ const userSchema = new mongoose.Schema({
   lastActive: {
     type: Date,
     default: Date.now
+  },
+  rulesAcceptedVersion: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

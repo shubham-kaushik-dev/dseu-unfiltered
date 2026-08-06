@@ -36,11 +36,44 @@ function AppContent() {
   });
 
   useEffect(() => {
-    const accepted = localStorage.getItem('dseu_rules_accepted') === '1.0';
-    if (!accepted) {
-      setShowRules(true);
+    if (loading) return;
+
+    if (user && user.isRegistered) {
+      if (user.rulesAcceptedVersion !== '1.0') {
+        setShowRules(true);
+      } else {
+        setShowRules(false);
+      }
+    } else {
+      const localAccepted = localStorage.getItem('dseu_rules_accepted') === '1.0';
+      if (!localAccepted) {
+        setShowRules(true);
+      } else {
+        setShowRules(false);
+      }
     }
-  }, [user]);
+  }, [user, loading]);
+
+  const handleAcceptRules = async () => {
+    localStorage.setItem('dseu_rules_accepted', '1.0');
+    setShowRules(false);
+
+    if (user && user.isRegistered) {
+      try {
+        const jwtToken = localStorage.getItem('dseu_jwt') || '';
+        await fetch(`${API_BASE}/api/auth/accept-rules`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        refreshProfile();
+      } catch (err) {
+        console.error('Error saving rules acceptance to database:', err);
+      }
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -183,7 +216,7 @@ function AppContent() {
     <>
       <DashboardPage />
       <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} />
-      <CommunityRulesModal isOpen={showRules} onAccept={() => setShowRules(false)} />
+      <CommunityRulesModal isOpen={showRules} onAccept={handleAcceptRules} />
     </>
   ) : (
     <SplashScreen user={user} loading={loading} onComplete={() => setEntered(true)} />

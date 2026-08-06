@@ -1,20 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Shield } from 'lucide-react';
 
-const RULES_VERSION = '1.0';
-
 export default function CommunityRulesModal({ isOpen, onAccept }) {
-  const [animate, setAnimate] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => setAnimate(true), 50);
-      return () => clearTimeout(timer);
-    } else {
-      setAnimate(false);
-    }
-  }, [isOpen]);
-
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (isOpen && e.key === 'Escape') {
@@ -28,19 +15,11 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
 
   if (!isOpen) return null;
 
-  const handleAgree = () => {
-    localStorage.setItem('dseu_rules_accepted', RULES_VERSION);
-    onAccept();
-  };
-
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-hidden">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-[#000000]/50 backdrop-blur-[3px] overflow-hidden">
       {/* Modal Container */}
-      <div 
-        className={`w-full max-w-[760px] bg-[#16181D] border border-[#2A2F3A] rounded-[12px] shadow-2xl flex flex-col max-h-[72vh] transition-opacity duration-200 overflow-hidden select-none ${
-          animate ? 'opacity-100' : 'opacity-0'
-        }`}
-      >
+      <div className="w-full max-w-[760px] bg-[#16181D] border border-[#2A2F3A] rounded-[12px] shadow-2xl flex flex-col max-h-[72vh] overflow-hidden select-none">
+        
         {/* Header (Fixed) */}
         <div className="p-6 border-b border-[#2A2F3A] text-center shrink-0">
           <div className="mx-auto h-10 w-10 bg-purple-950/20 border border-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 mb-2">
@@ -105,7 +84,7 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
             {
               num: 10,
               title: "Admin Decisions",
-              desc: "The administrator may warn, mute, remove content, temporarily suspend or permanently ban accounts that violate these rules."
+              desc: "The administrator may warn, delete content, remove, temporarily suspend or permanently ban accounts that violate these rules."
             }
           ].map((rule) => (
             <div key={rule.num} className="pt-4 first:pt-0 flex gap-4 items-start">
@@ -114,7 +93,7 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
               </div>
               <div className="space-y-1">
                 <h4 className="text-sm font-bold text-white tracking-wide">{rule.title}</h4>
-                <p className="text-[12px] text-zinc-200 leading-relaxed font-normal">{rule.desc}</p>
+                <p className="text-[12px] text-[#D1D5DB] leading-relaxed font-normal">{rule.desc}</p>
               </div>
             </div>
           ))}
@@ -128,7 +107,7 @@ export default function CommunityRulesModal({ isOpen, onAccept }) {
 
           <button
             type="button"
-            onClick={handleAgree}
+            onClick={onAccept}
             className="w-full max-w-[220px] py-2.5 px-6 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black uppercase tracking-wider rounded-lg transition duration-150 cursor-pointer shadow-md inline-flex items-center justify-center"
           >
             I Agree

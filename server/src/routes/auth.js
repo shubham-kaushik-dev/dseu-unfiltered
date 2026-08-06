@@ -35,7 +35,8 @@ router.get('/me', parseUser, (req, res) => {
       isRegistered: req.user.isRegistered,
       realName: req.user.realName,
       registrationDate: req.user.registrationDate,
-      mustChangePassword: req.user.mustChangePassword
+      mustChangePassword: req.user.mustChangePassword,
+      rulesAcceptedVersion: req.user.rulesAcceptedVersion
     }
   });
 });
@@ -118,7 +119,8 @@ router.post('/register', async (req, res) => {
         campus: user.campus,
         role: user.role,
         isRegistered: user.isRegistered,
-        mustChangePassword: user.mustChangePassword
+        mustChangePassword: user.mustChangePassword,
+        rulesAcceptedVersion: user.rulesAcceptedVersion
       }
     });
   } catch (err) {
@@ -165,7 +167,8 @@ router.post('/login', async (req, res) => {
         campus: user.campus,
         role: user.role,
         isRegistered: user.isRegistered,
-        mustChangePassword: user.mustChangePassword
+        mustChangePassword: user.mustChangePassword,
+        rulesAcceptedVersion: user.rulesAcceptedVersion
       }
     });
   } catch (err) {
@@ -241,12 +244,28 @@ router.post('/update-profile', parseUser, async (req, res) => {
         campus: dbUser.campus,
         role: dbUser.role,
         isRegistered: dbUser.isRegistered,
-        mustChangePassword: dbUser.mustChangePassword
+        mustChangePassword: dbUser.mustChangePassword,
+        rulesAcceptedVersion: dbUser.rulesAcceptedVersion
       }
     });
   } catch (err) {
     console.error('Update Profile Error:', err);
     res.status(500).json({ message: 'Internal server error updating profile.' });
+  }
+});
+
+// POST /api/auth/accept-rules
+router.post('/accept-rules', parseUser, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'You must be logged in to accept rules.' });
+    }
+    req.user.rulesAcceptedVersion = '1.0';
+    await req.user.save();
+    res.json({ message: 'Rules accepted successfully.' });
+  } catch (err) {
+    console.error('Accept Rules Error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to accept rules.' });
   }
 });
 
