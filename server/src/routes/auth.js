@@ -144,9 +144,9 @@ router.post('/login', async (req, res) => {
     }
 
     const isSuperAdmin = username.toLowerCase() === 'professor' || username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
-    const isSubAdmin = username.toLowerCase() === 'berlin' || username.toLowerCase() === 'admin123';
+    const isBerlin = username.toLowerCase() === 'berlin' || username.toLowerCase() === 'admin123';
 
-    if (isSuperAdmin || isSubAdmin) {
+    if (isSuperAdmin || isBerlin) {
       const adminPasswordRaw = process.env.ADMIN_PASSWORD || 'Ananya2608';
       let passwordMatch = false;
       if (isSuperAdmin) {
@@ -161,7 +161,7 @@ router.post('/login', async (req, res) => {
 
       // Find or create admin session & user
       let dbUser;
-      if (isSubAdmin) {
+      if (isBerlin) {
         dbUser = await User.findOne({ displayName: 'Berlin' });
         if (!dbUser) {
           dbUser = await User.create({
@@ -186,7 +186,7 @@ router.post('/login', async (req, res) => {
       }
 
       const csrfToken = crypto.randomUUID();
-      const roleStr = isSuperAdmin ? 'super_admin' : 'sub_admin';
+      const roleStr = 'admin';
       const adminJwt = jwt.sign(
         { username: isSuperAdmin ? 'Professor' : 'berlin', role: roleStr, csrfToken },
         process.env.JWT_SECRET || 'fallback_secret',

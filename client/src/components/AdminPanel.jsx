@@ -154,7 +154,8 @@ export default function AdminPanel({ onAdminStateChange }) {
   });
   const [settingsLoading, setSettingsLoading] = useState(false);
 
-  const [adminRole, setAdminRole] = useState(() => localStorage.getItem('dseu_admin_role') || 'super_admin');
+  const [adminRole, setAdminRole] = useState(() => localStorage.getItem('dseu_admin_role') || 'admin');
+  const [adminUsername, setAdminUsername] = useState(() => localStorage.getItem('dseu_admin_username') || '');
 
   // Trash Bin State
   const [trashItems, setTrashItems] = useState({ messages: [], confessions: [], memes: [], polls: [] });
@@ -203,9 +204,12 @@ export default function AdminPanel({ onAdminStateChange }) {
           const check = await res.json();
           setCsrfToken(check.csrfToken);
           setAdminCsrfToken(check.csrfToken);
-          const role = check.role || 'super_admin';
+          const role = check.role || 'admin';
           setAdminRole(role);
           localStorage.setItem('dseu_admin_role', role);
+          const checkUsername = check.username || '';
+          setAdminUsername(checkUsername);
+          localStorage.setItem('dseu_admin_username', checkUsername);
           setAdminLoggedIn(true);
           onAdminStateChange(true);
         }
@@ -398,9 +402,11 @@ export default function AdminPanel({ onAdminStateChange }) {
         setCsrfToken(data.csrfToken);
         setAdminCsrfToken(data.csrfToken);
         setAdminJwt(data.token);
-        const role = data.role || 'super_admin';
+        const role = data.role || 'admin';
         setAdminRole(role);
         localStorage.setItem('dseu_admin_role', role);
+        setAdminUsername(usernameInput);
+        localStorage.setItem('dseu_admin_username', usernameInput);
         setAdminLoggedIn(true);
         onAdminStateChange(true);
         showToast('Successfully logged in as administrator.', 'success');
@@ -428,8 +434,10 @@ export default function AdminPanel({ onAdminStateChange }) {
       setAdminCsrfToken('');
       setCsrfToken('');
       setAdminJwt('');
-      setAdminRole('super_admin');
+      setAdminRole('admin');
       localStorage.removeItem('dseu_admin_role');
+      setAdminUsername('');
+      localStorage.removeItem('dseu_admin_username');
       setAdminLoggedIn(false);
       onAdminStateChange(false);
       setUsernameInput('');
@@ -1148,6 +1156,8 @@ export default function AdminPanel({ onAdminStateChange }) {
     );
   }
 
+  const isBerlin = adminUsername.toLowerCase() === 'berlin' || adminUsername.toLowerCase() === 'admin123';
+
   return (
     <div className="min-h-screen bg-[#0F1117] text-slate-200 font-inter flex flex-col">
       {/* Navbar header */}
@@ -1156,7 +1166,7 @@ export default function AdminPanel({ onAdminStateChange }) {
           <Logo size="sm" showText={false} className="h-9 w-9" />
           <div>
             <h1 className="text-md font-black tracking-tight text-white uppercase leading-none">
-              {(adminRole === 'sub_admin' || adminRole === 'sub-admin') ? 'Berlin' : 'Professor'} Moderation Terminal
+              {isBerlin ? 'Berlin' : 'Professor'} Moderation Terminal
             </h1>
             <span className="text-[10px] font-mono text-purple-400 uppercase tracking-widest block mt-0.5">DSEU Unfiltered Oversight</span>
           </div>
@@ -1164,14 +1174,14 @@ export default function AdminPanel({ onAdminStateChange }) {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <img 
-              src={(adminRole === 'sub_admin' || adminRole === 'sub-admin') ? berlinAvatar : professorAvatar} 
+              src={isBerlin ? berlinAvatar : professorAvatar} 
               alt="Avatar" 
               className="h-8 w-8 rounded-full border border-slate-700 bg-[#0F1117] object-cover shrink-0" 
             />
             <div className="flex flex-col leading-none">
-              <span className="text-xs font-black text-white">{(adminRole === 'sub_admin' || adminRole === 'sub-admin') ? 'Berlin' : 'Professor'}</span>
+              <span className="text-xs font-black text-white">{isBerlin ? 'Berlin' : 'Professor'}</span>
               <span className="text-[8px] font-black bg-gradient-to-r from-purple-500 to-amber-500 bg-clip-text text-transparent px-1.5 py-0.5 border border-purple-500/20 rounded uppercase tracking-wider mt-0.5 select-none font-mono">
-                {(adminRole === 'sub_admin' || adminRole === 'sub-admin') ? 'SUB ADMIN' : 'ADMIN'}
+                {isBerlin ? 'SUB ADMIN' : 'ADMIN'}
               </span>
             </div>
           </div>
@@ -1189,7 +1199,7 @@ export default function AdminPanel({ onAdminStateChange }) {
         {[
           { id: 'analytics', label: 'Dashboard', icon: ShieldCheck },
           { id: 'users', label: 'Directory', icon: Users },
-          ...((adminRole !== 'sub_admin' && adminRole !== 'sub-admin') ? [{ id: 'registered', label: 'Registered Users', icon: Users }] : []),
+          ...(!isBerlin ? [{ id: 'registered', label: 'Registered Users', icon: Users }] : []),
           { id: 'banned', label: 'Banned Users', icon: Ban },
           { id: 'resets', label: 'Reset Requests', icon: KeyRound },
           { id: 'reports', label: 'Reports', icon: AlertTriangle },
@@ -2080,7 +2090,7 @@ export default function AdminPanel({ onAdminStateChange }) {
                             ) : '-'}
                           </td>
                           <td className="p-4 text-center">
-                            {(adminRole !== 'sub_admin' && adminRole !== 'sub-admin' || u.isBanned) && (
+                            {(!isBerlin || u.isBanned) && (
                               <button
                                 onClick={() => handleOpenUserDrawer(u._id)}
                                 className="px-3 py-1.5 bg-[#1e2230] hover:bg-[#2c3147] text-slate-300 hover:text-white rounded-xl border border-slate-800 cursor-pointer text-xs transition"

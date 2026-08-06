@@ -111,11 +111,11 @@ export function UserProvider({ children }) {
       
       const fetchedUser = data.user;
       if (fetchedUser) {
-        const checkAdmin = fetchedUser.role === 'admin' || fetchedUser.role === 'sub_admin' || fetchedUser.role === 'sub-admin' || fetchedUser.displayName === 'Professor (ADMIN)' || fetchedUser.displayName === 'Berlin';
+        const checkAdmin = fetchedUser.role === 'admin' || fetchedUser.displayName === 'Professor (ADMIN)' || fetchedUser.displayName === 'Berlin';
         fetchedUser.isAdmin = checkAdmin;
         fetchedUser.isAuthenticated = checkAdmin || fetchedUser.isRegistered === true;
-        if (fetchedUser.displayName === 'Berlin' || fetchedUser.displayName?.toLowerCase().includes('berlin')) {
-          fetchedUser.role = 'sub_admin';
+        if (checkAdmin) {
+          fetchedUser.role = 'admin';
         }
       }
       setUser(fetchedUser);
@@ -191,7 +191,7 @@ export function UserProvider({ children }) {
     fetchProfile();
   }, []);
 
-  const isUserAdmin = user?.role === 'admin' || user?.role === 'sub_admin' || user?.role === 'sub-admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' || user?.displayName === 'Berlin';
+  const isUserAdmin = user?.role === 'admin' || user?.isAdmin === true || user?.displayName === 'Professor (ADMIN)' || user?.displayName === 'Berlin';
   const isUserAuthenticated = isUserAdmin || user?.isRegistered === true;
 
   return (

@@ -162,7 +162,7 @@ export default function ConfessionCard({ confession, onReact, onAddComment, onRe
                         src={(() => {
                           const sender = comment.sender;
                           if (!sender) return '';
-                          if (sender.role === 'admin' || sender.role === 'sub-admin' || sender.role === 'sub_admin' || sender.isAdmin === true || sender.displayName === 'Professor (ADMIN)' || sender.displayName === 'Berlin') {
+                          if (sender.role === 'admin' || sender.isAdmin === true || sender.displayName === 'Professor (ADMIN)' || sender.displayName === 'Berlin') {
                             if (sender.displayName === 'Berlin' || sender.displayName?.toLowerCase().includes('berlin')) {
                               return berlinAvatar;
                             }

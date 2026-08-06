@@ -20,11 +20,11 @@ export async function parseUser(req, res, next) {
         const decoded = jwt.verify(adminToken, process.env.JWT_SECRET || 'fallback_secret');
         const superAdminUsername = 'Professor';
         const envAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
-        const subAdminUsername = 'berlin';
+        const berlinUsername = 'berlin';
         
         if (decoded && 
-            (decoded.username === superAdminUsername || decoded.username === envAdminUsername || decoded.username === subAdminUsername) && 
-            (decoded.role === 'super_admin' || decoded.role === 'sub_admin' || decoded.role === 'sub-admin')) {
+            (decoded.username === superAdminUsername || decoded.username === envAdminUsername || decoded.username === berlinUsername) && 
+            decoded.role === 'admin') {
           isAdmin = true;
           adminUsernameFromToken = decoded.username;
         }
@@ -43,14 +43,14 @@ export async function parseUser(req, res, next) {
           user = await User.create({
             browserToken: 'admin-token-fixed-value-berlin-2026',
             displayName: 'Berlin',
-            role: 'sub-admin',
+            role: 'admin',
             isRegistered: true,
             campus: 'DSEU'
           });
         } else {
           let changed = false;
-          if (user.role !== 'sub-admin') {
-            user.role = 'sub-admin';
+          if (user.role !== 'admin') {
+            user.role = 'admin';
             changed = true;
           }
           if (!user.isRegistered) {

@@ -401,7 +401,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
             const isEditable = isMe && (Date.now() - new Date(msg.createdAt).getTime() < 5 * 60 * 1000);
             
             // Check admin checks
-            const isSenderAdmin = msg.sender?.role === 'admin' || msg.sender?.role === 'sub_admin' || msg.sender?.role === 'sub-admin' || msg.sender?.displayName === 'Professor (ADMIN)' || msg.sender?.displayName === 'Berlin';
+            const isSenderAdmin = msg.sender?.role === 'admin' || msg.sender?.displayName === 'Professor (ADMIN)' || msg.sender?.displayName === 'Berlin';
 
             // Render Official Notice cards
             if (msg.messageType === 'notice') {

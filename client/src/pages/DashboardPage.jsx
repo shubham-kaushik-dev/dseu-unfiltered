@@ -240,7 +240,7 @@ export default function DashboardPage({ onOpenRules }) {
     { id: 'confessions', label: 'Confessions', icon: HeartHandshake },
     { id: 'memes', label: 'Meme Board', icon: ImageIcon },
     { id: 'polls', label: 'Campus Polls', icon: BarChart3 },
-    ...((user?.isRegistered || user?.role === 'admin' || user?.role === 'sub-admin' || user?.role === 'sub_admin') ? [{ id: 'support', label: 'Contact Professor', icon: HelpCircle }] : []),
+    ...((user?.isRegistered || user?.role === 'admin') ? [{ id: 'support', label: 'Contact Professor', icon: HelpCircle }] : []),
     { id: 'rules', label: 'Rules & Regulations', icon: Shield },
     { id: 'admin', label: 'Admin Moderation', icon: ShieldAlert }
   ];
@@ -347,7 +347,7 @@ export default function DashboardPage({ onOpenRules }) {
 
           {/* User Auth Actions */}
           <div className="flex gap-2">
-            {(user?.isRegistered || user?.role === 'admin' || user?.role === 'sub-admin' || user?.role === 'sub_admin') ? (
+            {(user?.isRegistered || user?.role === 'admin') ? (
               <>
                 <button
                   onClick={() => setShowProfileModal(true)}

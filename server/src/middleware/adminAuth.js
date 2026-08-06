@@ -56,13 +56,13 @@ export function requireAdmin(req, res, next) {
     
     const superAdminUsername = 'Professor';
     const envAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
-    const subAdminUsername = 'berlin';
-    const subAdminUsername2 = 'admin123';
+    const berlinUsername = 'berlin';
+    const berlinUsername2 = 'admin123';
     
     if (decoded.username !== superAdminUsername && 
         decoded.username !== envAdminUsername && 
-        decoded.username !== subAdminUsername &&
-        decoded.username !== subAdminUsername2) {
+        decoded.username !== berlinUsername &&
+        decoded.username !== berlinUsername2) {
       return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'Invalid admin credentials.' });
     }
 
@@ -93,7 +93,11 @@ export function requireSuperAdmin(req, res, next) {
   if (!req.admin) {
     return res.status(401).json({ error: 'ADMIN_UNAUTHORIZED', message: 'Unauthorized. Admin session missing.' });
   }
-  if (req.admin.role !== 'super_admin') {
+  const superAdminUsername = 'Professor';
+  const envAdminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
+  const username = req.admin.username;
+  
+  if (username !== superAdminUsername && username !== envAdminUsername) {
     return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'ACCESS DENIED. Super Admin privileges required.' });
   }
   next();

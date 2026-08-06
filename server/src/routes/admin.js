@@ -113,13 +113,13 @@ const upload = multer({
 });
 
 let hashedAdminPassword = '';
-let hashedSubAdminPassword = '';
+let hashedBerlinPassword = '';
 const adminUsername = process.env.ADMIN_USERNAME || 'Kaushik';
 const adminPasswordRaw = process.env.ADMIN_PASSWORD || 'Ananya2608';
 
 const initAdminPassword = async () => {
   hashedAdminPassword = await bcrypt.hash(adminPasswordRaw, 10);
-  hashedSubAdminPassword = await bcrypt.hash('Kaushik2608', 10);
+  hashedBerlinPassword = await bcrypt.hash('Kaushik2608', 10);
 };
 initAdminPassword();
 
@@ -141,14 +141,14 @@ router.post('/login', async (req, res) => {
   }
 
   const isSuperAdmin = username === 'Professor' || username === adminUsername;
-  const isSubAdmin = username === 'berlin';
-  const usernameMatch = isSuperAdmin || isSubAdmin;
+  const isBerlin = username === 'berlin';
+  const usernameMatch = isSuperAdmin || isBerlin;
   let passwordMatch = false;
 
   if (isSuperAdmin) {
     passwordMatch = await bcrypt.compare(password, hashedAdminPassword);
-  } else if (isSubAdmin) {
-    passwordMatch = await bcrypt.compare(password, hashedSubAdminPassword);
+  } else if (isBerlin) {
+    passwordMatch = await bcrypt.compare(password, hashedBerlinPassword);
   }
 
   if (!usernameMatch || !passwordMatch) {
@@ -164,7 +164,7 @@ router.post('/login', async (req, res) => {
 
   clearFailedAttempts(ip);
 
-  const role = isSuperAdmin ? 'super_admin' : 'sub_admin';
+  const role = 'admin';
 
   // 1. Log session in MongoDB
   const session = await AdminSession.create({
@@ -482,7 +482,8 @@ router.get('/users', requireAdmin, async (req, res) => {
       const reportCount = await Report.countDocuments({ reporterToken: u.browserToken });
 
       const uObj = u.toObject();
-      if (req.admin.role === 'sub_admin') {
+      const isProfessor = req.admin.username.toLowerCase() === 'professor' || req.admin.username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
+      if (!isProfessor) {
         uObj.realName = '[REDACTED]';
         uObj.campus = '[REDACTED]';
       }
@@ -522,8 +523,9 @@ router.get('/user/:id/profile', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
     }
 
-    // Restriction check: sub_admin can only view profile if the user is banned
-    if (req.admin.role === 'sub_admin' && !userObj.isBanned) {
+    // Restriction check: Berlin can only view profile if the user is banned
+    const isProfessor = req.admin.username.toLowerCase() === 'professor' || req.admin.username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
+    if (!isProfessor && !userObj.isBanned) {
       return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'ACCESS DENIED. Super Admin privileges required.' });
     }
 
@@ -535,7 +537,7 @@ router.get('/user/:id/profile', requireAdmin, async (req, res) => {
     const logs = await AdminLog.find({ details: { $regex: userObj.displayName, $options: 'i' } }).sort({ createdAt: -1 });
 
     const profileObj = userObj.toObject();
-    if (req.admin.role === 'sub_admin') {
+    if (!isProfessor) {
       profileObj.realName = '[REDACTED]';
       profileObj.campus = '[REDACTED]';
     }
@@ -1754,8 +1756,8 @@ router.get('/banned-users', requireAdmin, async (req, res) => {
 
       const warningCount = u.warnings ? u.warnings.length : 0;
 
-      const uObj = u.toObject();
-      if (req.admin.role === 'sub_admin') {
+      const isProfessor = req.admin.username.toLowerCase() === 'professor' || req.admin.username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
+      if (!isProfessor) {
         uObj.realName = '[REDACTED]';
         uObj.campus = '[REDACTED]';
       }
@@ -1803,8 +1805,9 @@ router.get('/registered-users/:id/details', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
     }
 
-    // Redact private fields if Berlin / sub-admin
-    if (req.admin.role === 'sub_admin') {
+    // Redact private fields if Berlin
+    const isProfessor = req.admin.username.toLowerCase() === 'professor' || req.admin.username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
+    if (!isProfessor) {
       user.realName = '[REDACTED]';
       user.campus = '[REDACTED]';
       user.browserToken = '[REDACTED]';
@@ -1893,8 +1896,9 @@ router.delete('/registered-users/:id', requireAdmin, async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // Restriction check: sub_admin can only delete user if the user is banned
-    if (req.admin.role === 'sub_admin' && !user.isBanned) {
+    // Restriction check: Berlin can only delete user if the user is banned
+    const isProfessor = req.admin.username.toLowerCase() === 'professor' || req.admin.username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
+    if (!isProfessor && !user.isBanned) {
       return res.status(403).json({ error: 'ADMIN_FORBIDDEN', message: 'ACCESS DENIED. Super Admin privileges required.' });
     }
 
@@ -1973,7 +1977,8 @@ router.post('/reset-requests/direct-reset', requireAdmin, async (req, res) => {
 router.get('/reset-requests', requireAdmin, async (req, res) => {
   try {
     let requests = await PasswordResetRequest.find().sort({ createdAt: -1 });
-    if (req.admin.role === 'sub_admin' || req.admin.role === 'sub-admin') {
+    const isProfessor = req.admin.username.toLowerCase() === 'professor' || req.admin.username.toLowerCase() === (process.env.ADMIN_USERNAME || 'kaushik').toLowerCase();
+    if (!isProfessor) {
       requests = requests.map(r => {
         const obj = r.toObject();
         obj.realName = '[REDACTED]';
