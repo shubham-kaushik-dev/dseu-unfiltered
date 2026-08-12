@@ -68,3 +68,52 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// Push notification event listener
+self.addEventListener('push', (event) => {
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      const options = {
+        body: data.body,
+        icon: '/favicon.svg',
+        badge: '/favicon.svg',
+        data: {
+          url: data.url || '/'
+        }
+      };
+
+      event.waitUntil(
+        self.registration.showNotification(data.title || 'DSEU Unfiltered', options)
+      );
+    } catch (err) {
+      console.error('[Service Worker] Error parsing push event data:', err);
+    }
+  }
+});
+
+// Notification click event listener
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const urlToOpen = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Focus open window if any matches origin
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          return client.focus().then((focusedClient) => {
+            if (focusedClient) {
+              focusedClient.postMessage({ action: 'focus-chat' });
+            }
+          });
+        }
+      }
+      // Or open a new one
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});

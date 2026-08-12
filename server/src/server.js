@@ -23,8 +23,10 @@ import pollsRouter from './routes/polls.js';
 import adminRouter from './routes/admin.js';
 import supportRouter from './routes/support.js';
 import publicSettingsRouter from './routes/publicSettings.js';
+import pushRouter from './routes/push.js';
 
 // Models & Utils
+import { initWebPush, sendPushNotifications } from './utils/webPushHelper.js';
 import User from './models/User.js';
 import LiveChatMessage from './models/LiveChatMessage.js';
 import Confession from './models/Confession.js';
@@ -114,6 +116,7 @@ app.use('/api/memes', memesRouter);
 app.use('/api/polls', pollsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/support', supportRouter);
+app.use('/api/push', pushRouter);
 
 // Fetch chat history (latest 50 messages chronologically)
 app.get('/api/chat', parseUser, async (req, res) => {
@@ -221,6 +224,7 @@ async function connectWithRetry(uri, retries = 5, delay = 5000) {
 connectWithRetry(dbUri)
   .then(async () => {
     await seedDatabase();
+    await initWebPush();
     initBackupScheduler();
     initTrashCleanupScheduler();
     startHttpServer();
@@ -231,6 +235,7 @@ connectWithRetry(dbUri)
       await mongoose.connect('mongodb://127.0.0.1:27017/dseu_unfiltered');
       logger.info('MongoDB Connected successfully to Local Fallback Database.');
       await seedDatabase();
+      await initWebPush();
       initBackupScheduler();
       initTrashCleanupScheduler();
       startHttpServer();
@@ -466,6 +471,8 @@ io.on('connection', async (socket) => {
           text: `Message from ${active.displayName}: "${sanitizedText.substring(0, 30)}..."`,
           timestamp: new Date()
         });
+        // Send Web Push notifications to other users asynchronously (if not shadow-banned)
+        sendPushNotifications(populatedMsg, active.id).catch(err => console.error('Push error:', err));
       }
 
       if (updatedUser) {

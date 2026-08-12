@@ -175,4 +175,16 @@ body {
   animation: message-arrive-flash 1.2s ease-out;
 }
 
+/* Screenshot & Screen-Capture Protection Deterrent Styles */
+.blurred-screen-protect {
+  filter: blur(20px) grayscale(100%) brightness(0.3) !important;
+  pointer-events: none !important;
+}
+
+@media print {
+  body {
+    display: none !important;
+  }
+}
+
 

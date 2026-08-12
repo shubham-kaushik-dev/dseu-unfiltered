@@ -14,6 +14,56 @@ import CommunityRulesModal from './components/CommunityRulesModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function subscribeUserToPush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const res = await fetch(`${API_BASE}/api/push/vapid-public-key`);
+    if (!res.ok) throw new Error('Failed to get public VAPID key');
+    const { publicKey } = await res.json();
+
+    const subscribeOptions = {
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    };
+
+    const subscription = await reg.pushManager.subscribe(subscribeOptions);
+
+    const token = localStorage.getItem('dseu_unfiltered_token');
+    const adminJwtToken = localStorage.getItem('dseu_admin_jwt') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['x-anonymous-token'] = token;
+    }
+    if (adminJwtToken) {
+      headers['Authorization'] = `Bearer ${adminJwtToken}`;
+    }
+
+    await fetch(`${API_BASE}/api/push/subscribe`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(subscription)
+    });
+    console.log('Successfully registered Web Push notification subscription');
+  } catch (err) {
+    console.error('Error during Web Push registration:', err);
+  }
+}
+
 function AppContent() {
   const { 
     user, 
@@ -76,6 +126,84 @@ function AppContent() {
       }
     }
   };
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.log('Push notifications are not supported in this browser.');
+      return;
+    }
+
+    const initPush = async () => {
+      try {
+        if (Notification.permission === 'default') {
+          // Wait 3 seconds so we don't startle the user immediately
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            await subscribeUserToPush();
+          }
+        } else if (Notification.permission === 'granted') {
+          await subscribeUserToPush();
+        }
+      } catch (err) {
+        console.error('Error initializing push subscription:', err);
+      }
+    };
+
+    if (user) {
+      initPush();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // 1. PrintScreen key
+      if (e.key === 'PrintScreen' || e.keyCode === 44) {
+        navigator.clipboard.writeText('');
+        showToast('Screen capture protection active. Content copying is disabled.', 'warning');
+        e.preventDefault();
+      }
+
+      // 2. Key combinations for screenshots (Cmd/Win + Shift + S)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'S' || e.key === 's')) {
+        showToast('Screen capture protection active. Content copying is disabled.', 'warning');
+        e.preventDefault();
+      }
+
+      // 3. Print dialog (Ctrl/Cmd + P)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'P' || e.key === 'p')) {
+        showToast('Printing is disabled to protect platform confidentiality.', 'warning');
+        e.preventDefault();
+      }
+    };
+
+    const handleBlur = () => {
+      document.body.classList.add('blurred-screen-protect');
+    };
+    const handleFocus = () => {
+      document.body.classList.remove('blurred-screen-protect');
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        document.body.classList.add('blurred-screen-protect');
+      } else {
+        document.body.classList.remove('blurred-screen-protect');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [showToast]);
 
   useEffect(() => {
     if (!loading && user) {
