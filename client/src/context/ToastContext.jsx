@@ -30,7 +30,11 @@ export function ToastProvider({ children }) {
           let Icon = Info;
           let iconColor = 'text-cyan-400';
 
-          if (toast.type === 'success') {
+          if (toast.type === 'identity') {
+            bgClass = 'bg-black border-zinc-800 text-white';
+            Icon = Info;
+            iconColor = 'text-white';
+          } else if (toast.type === 'success') {
             bgClass = 'bg-emerald-950/90 border-emerald-500/30 text-emerald-100';
             Icon = CheckCircle;
             iconColor = 'text-emerald-400';

@@ -85,7 +85,7 @@ function AppContent() {
       if (isGuest) {
         const shownKey = `dseu_random_name_shown_for_${user.displayName}`;
         if (!localStorage.getItem(shownKey)) {
-          showToast(`Your random name is ${user.displayName}`, 'info');
+          showToast(`Your random name is ${user.displayName}`, 'identity');
           localStorage.setItem(shownKey, 'true');
         }
       }
