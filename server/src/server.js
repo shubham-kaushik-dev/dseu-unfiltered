@@ -338,13 +338,16 @@ io.on('connection', async (socket) => {
 
   // Handle live chat messages
   socket.on('send-chat-message', async (data) => {
+    let updatedUser = null;
+    let isGuest = false;
+    let user = null;
     try {
       const active = activeUsers.get(socket.id);
       if (!active) {
         return socket.emit('chat-error', { message: 'Register your identity first.' });
       }
 
-      const user = await User.findById(active.id);
+      user = await User.findById(active.id);
       if (!user || user.isBanned) {
         return socket.emit('chat-error', { message: 'Your identity is banned.' });
       }
@@ -356,6 +359,22 @@ io.on('connection', async (socket) => {
       if (user.mutedUntil && user.mutedUntil > new Date()) {
         const remaining = Math.ceil((user.mutedUntil - new Date()) / 1000 / 60);
         return socket.emit('chat-error', { message: `You are muted. Try again in ${remaining} minutes.` });
+      }
+
+      const isPrivileged = ['admin', 'sub-admin', 'sub_admin'].includes(user.role);
+      isGuest = !user.isRegistered && !isPrivileged;
+
+      if (isGuest) {
+        // Atomically check and increment sentMessageCount
+        updatedUser = await User.findOneAndUpdate(
+          { _id: user._id, isRegistered: false, role: { $nin: ['admin', 'sub-admin', 'sub_admin'] }, sentMessageCount: 0 },
+          { $inc: { sentMessageCount: 1 } },
+          { new: true }
+        );
+
+        if (!updatedUser) {
+          return socket.emit('chat-error', { code: 'GUEST_LIMIT_REACHED', message: 'GUEST_LIMIT_REACHED' });
+        }
       }
 
       let text = '';
@@ -371,10 +390,18 @@ io.on('connection', async (socket) => {
       }
 
       if (!text || typeof text !== 'string' || text.trim() === '') {
+        if (updatedUser) {
+          await User.updateOne({ _id: user._id }, { $inc: { sentMessageCount: -1 } });
+          updatedUser = null;
+        }
         return socket.emit('chat-error', { message: 'Message content cannot be empty.' });
       }
 
       if (text.length > 500) {
+        if (updatedUser) {
+          await User.updateOne({ _id: user._id }, { $inc: { sentMessageCount: -1 } });
+          updatedUser = null;
+        }
         return socket.emit('chat-error', { message: 'Message is too long (max 500 chars).' });
       }
 
@@ -388,6 +415,10 @@ io.on('connection', async (socket) => {
           const timeDiff = (Date.now() - lastTime) / 1000;
           if (timeDiff < slowModeSeconds) {
             const cooldownRemaining = Math.ceil(slowModeSeconds - timeDiff);
+            if (updatedUser) {
+              await User.updateOne({ _id: user._id }, { $inc: { sentMessageCount: -1 } });
+              updatedUser = null;
+            }
             return socket.emit('chat-error', { 
               message: `Slow mode is active. Wait ${cooldownRemaining}s before sending another message.` 
             });
@@ -437,11 +468,22 @@ io.on('connection', async (socket) => {
         });
       }
 
+      if (updatedUser) {
+        socket.emit('profile-update', { sentMessageCount: updatedUser.sentMessageCount });
+      }
+
       const totalChatMessages = await LiveChatMessage.countDocuments();
       io.to('admin').emit('admin-stats-update', { totalChatMessages });
 
     } catch (err) {
       console.error('Socket chat message handling error:', err);
+      if (isGuest && user && updatedUser) {
+        try {
+          await User.updateOne({ _id: user._id }, { $inc: { sentMessageCount: -1 } });
+        } catch (rollbackErr) {
+          console.error('Failed to rollback guest message count:', rollbackErr);
+        }
+      }
       socket.emit('chat-error', { message: 'Failed to process message.' });
     }
   });

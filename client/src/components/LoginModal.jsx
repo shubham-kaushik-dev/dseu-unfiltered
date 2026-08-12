@@ -27,13 +27,19 @@ const CAMPUSES = [
   "Bhai Parmanand DSEU Campus"
 ];
 
-export default function LoginModal({ isOpen, onClose, onSuccess, originalMessageState }) {
+export default function LoginModal({ isOpen, onClose, onSuccess, originalMessageState, initialView = 'register' }) {
   const { refreshProfile } = useContext(UserContext);
   const { showToast } = useContext(ToastContext);
   const API_BASE = import.meta.env.VITE_API_URL || "";
 
   // View state: 'login', 'register', 'forgot'
-  const [view, setView] = useState('register');
+  const [view, setView] = useState(initialView);
+
+  useEffect(() => {
+    if (isOpen) {
+      setView(initialView);
+    }
+  }, [isOpen, initialView]);
 
   // Dropdown states
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);

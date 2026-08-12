@@ -74,6 +74,10 @@ const userSchema = new mongoose.Schema({
     default: 'user',
     enum: ['user', 'admin']
   },
+  sentMessageCount: {
+    type: Number,
+    default: 0
+  },
   browser: {
     type: String,
     default: ''

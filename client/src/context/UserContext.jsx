@@ -34,9 +34,11 @@ export function UserProvider({ children }) {
   // Registration & login modal states
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginModalCallback, setLoginModalCallback] = useState(null);
+  const [loginModalInitialView, setLoginModalInitialView] = useState('register');
 
-  const openLoginModal = (callback) => {
+  const openLoginModal = (callback, initialView = 'register') => {
     setLoginModalCallback(() => callback);
+    setLoginModalInitialView(initialView);
     setShowLoginModal(true);
   };
 
@@ -66,9 +68,11 @@ export function UserProvider({ children }) {
     }
   };
 
-  const fetchProfile = async () => {
+  const fetchProfile = async (isRetry = false) => {
     try {
-      setLoading(true);
+      if (!isRetry) {
+        setLoading(true);
+      }
       const token = localStorage.getItem('dseu_unfiltered_token');
       const adminJwtToken = adminJwt || localStorage.getItem('dseu_admin_jwt') || '';
       const headers = {};
@@ -136,6 +140,8 @@ export function UserProvider({ children }) {
     } catch (error) {
       console.error('Error fetching anonymous identity:', error);
       setLoading(false);
+      // Gracefully retry in the background
+      setTimeout(() => fetchProfile(true), 5000);
     }
   };
 
@@ -215,6 +221,7 @@ export function UserProvider({ children }) {
       showLoginModal,
       setShowLoginModal,
       openLoginModal,
+      loginModalInitialView,
       onLoginSuccess,
       isAdmin: isUserAdmin,
       isAuthenticated: isUserAuthenticated

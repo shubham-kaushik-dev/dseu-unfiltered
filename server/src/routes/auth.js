@@ -36,7 +36,8 @@ router.get('/me', parseUser, (req, res) => {
       realName: req.user.realName,
       registrationDate: req.user.registrationDate,
       mustChangePassword: req.user.mustChangePassword,
-      rulesAcceptedVersion: req.user.rulesAcceptedVersion
+      rulesAcceptedVersion: req.user.rulesAcceptedVersion,
+      sentMessageCount: req.user.sentMessageCount || 0
     }
   });
 });
@@ -125,7 +126,8 @@ router.post('/register', async (req, res) => {
         role: user.role,
         isRegistered: user.isRegistered,
         mustChangePassword: user.mustChangePassword,
-        rulesAcceptedVersion: user.rulesAcceptedVersion
+        rulesAcceptedVersion: user.rulesAcceptedVersion,
+        sentMessageCount: user.sentMessageCount || 0
       }
     });
   } catch (err) {
@@ -213,7 +215,8 @@ router.post('/login', async (req, res) => {
           role: dbUser.role,
           isRegistered: dbUser.isRegistered,
           mustChangePassword: dbUser.mustChangePassword,
-          rulesAcceptedVersion: dbUser.rulesAcceptedVersion
+          rulesAcceptedVersion: dbUser.rulesAcceptedVersion,
+          sentMessageCount: dbUser.sentMessageCount || 0
         }
       });
     }
@@ -248,7 +251,8 @@ router.post('/login', async (req, res) => {
         role: user.role,
         isRegistered: user.isRegistered,
         mustChangePassword: user.mustChangePassword,
-        rulesAcceptedVersion: user.rulesAcceptedVersion
+        rulesAcceptedVersion: user.rulesAcceptedVersion,
+        sentMessageCount: user.sentMessageCount || 0
       }
     });
   } catch (err) {
@@ -325,7 +329,8 @@ router.post('/update-profile', parseUser, async (req, res) => {
         role: dbUser.role,
         isRegistered: dbUser.isRegistered,
         mustChangePassword: dbUser.mustChangePassword,
-        rulesAcceptedVersion: dbUser.rulesAcceptedVersion
+        rulesAcceptedVersion: dbUser.rulesAcceptedVersion,
+        sentMessageCount: dbUser.sentMessageCount || 0
       }
     });
   } catch (err) {

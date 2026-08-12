@@ -64,8 +64,9 @@ export function SocketProvider({ children }) {
 
   // When user state is loaded, register browser token to sync nickname
   useEffect(() => {
-    if (socket && user?.browserToken) {
-      socket.emit('register-identity', user.browserToken);
+    const localToken = localStorage.getItem('dseu_unfiltered_token');
+    if (socket && (user?.browserToken || localToken)) {
+      socket.emit('register-identity', user?.browserToken || localToken);
     }
   }, [socket, user]);
 

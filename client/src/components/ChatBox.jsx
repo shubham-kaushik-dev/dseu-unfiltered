@@ -139,6 +139,10 @@ export default function ChatBox({ isAdmin, adminToken }) {
     };
 
     const handleChatError = (data) => {
+      if (data && (data.code === 'GUEST_LIMIT_REACHED' || data.message === 'GUEST_LIMIT_REACHED')) {
+        openLoginModal(() => {}, 'register');
+        return;
+      }
       showToast(data.message || 'An error occurred with chat.', 'error');
     };
 
@@ -215,7 +219,10 @@ export default function ChatBox({ isAdmin, adminToken }) {
     e.preventDefault();
     if (inputText.trim() === '' || cooldown > 0) return;
 
-    if (!isAdminFromContext && (!user || !user.isRegistered)) {
+    const isPrivileged = user && ['admin', 'sub-admin', 'sub_admin'].includes(user.role);
+    const isGuest = user ? (!user.isRegistered && !isPrivileged) : false;
+
+    if (isGuest && user.sentMessageCount >= 1) {
       openLoginModal(() => {
         socket.emit('send-chat-message', {
           text: inputText,
@@ -236,7 +243,7 @@ export default function ChatBox({ isAdmin, adminToken }) {
         if (inputRef.current) {
           inputRef.current.style.height = '48px';
         }
-      });
+      }, 'register');
       return;
     }
 

@@ -17,6 +17,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
 function AppContent() {
   const { 
     user, 
+    setUser,
     loading, 
     isBanned, 
     isMaintenanceActive, 
@@ -25,12 +26,13 @@ function AppContent() {
     refreshProfile,
     showLoginModal,
     setShowLoginModal,
+    loginModalInitialView,
     onLoginSuccess
   } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
   const { showToast } = useContext(ToastContext);
   
-  const [entered, setEntered] = useState(false);
+  const [entered, setEntered] = useState(true);
   const COMMUNITY_RULES_VERSION = "1.0";
   const hasCheckedRules = useRef(false);
   const [showRules, setShowRules] = useState(false);
@@ -74,6 +76,35 @@ function AppContent() {
       }
     }
   };
+
+  useEffect(() => {
+    if (!loading && user) {
+      const isPrivileged = ['admin', 'sub-admin', 'sub_admin'].includes(user.role);
+      const isGuest = !user.isRegistered && !isPrivileged;
+      
+      if (isGuest) {
+        const shownKey = `dseu_random_name_shown_for_${user.displayName}`;
+        if (!localStorage.getItem(shownKey)) {
+          showToast(`Your random name is ${user.displayName}`, 'info');
+          localStorage.setItem(shownKey, 'true');
+        }
+      }
+    }
+  }, [user, loading, showToast]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleProfileUpdate = (data) => {
+      setUser((prev) => {
+        if (!prev) return prev;
+        return { ...prev, ...data };
+      });
+    };
+    socket.on('profile-update', handleProfileUpdate);
+    return () => {
+      socket.off('profile-update', handleProfileUpdate);
+    };
+  }, [socket, setUser]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -139,7 +170,7 @@ function AppContent() {
     return (
       <>
         <BannedPage user={user || { browserToken: localStorage.getItem('dseu_unfiltered_token') }} />
-        <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} />
+        <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} initialView={loginModalInitialView} />
       </>
     );
   }
@@ -215,7 +246,7 @@ function AppContent() {
   return entered ? (
     <>
       <DashboardPage onOpenRules={() => setShowRules(true)} />
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} />
+      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={onLoginSuccess} initialView={loginModalInitialView} />
       <CommunityRulesModal isOpen={showRules} onAccept={handleAcceptRules} />
     </>
   ) : (
